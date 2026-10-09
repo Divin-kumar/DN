@@ -7,21 +7,20 @@ import {
   Filter,
   Flag,
   Link2,
-  Paperclip,
   Plus,
+  RotateCcw,
   Search,
   Trash2,
-  Unlink,
-  Wallet,
+  X,
 } from 'lucide-react';
 import {
   ActivityPriority,
   ActivityRecord,
   DNDatabase,
-  MomentRecord,
 } from '../types/dn';
 import { formatDate, getDaysUntil, getRelativeDayText, getTodayISO } from '../utils/dnHelpers';
 import { ConfirmDialog } from './ConfirmDialog';
+import { FilterSheet } from './FilterSheet';
 import { QuickCreateMode } from './QuickCreateModal';
 
 interface ActivitiesViewProps {
@@ -48,16 +47,24 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'alphabetical'>(
     db.settings.activitySort || 'date'
   );
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [activityToDelete, setActivityToDelete] = useState<ActivityRecord | null>(null);
 
-  // Quick inline task creation state
-  const [inlineTitle, setInlineTitle] = useState('');
-  const [inlineDate, setInlineDate] = useState(getTodayISO());
-  const [inlinePriority, setInlinePriority] = useState<ActivityPriority>('medium');
-  const [inlineMomentId, setInlineMomentId] = useState<string>('');
-  const [showInlineForm, setShowInlineForm] = useState(false);
-
   const cardStyle = db.settings.activityCardStyle || 'detailed';
+
+  const activeFiltersCount =
+    (statusFilter !== 'all' ? 1 : 0) +
+    (priorityFilter !== 'all' ? 1 : 0) +
+    (selectedEventFilter !== 'all' ? 1 : 0) +
+    (sortBy !== 'date' ? 1 : 0);
+
+  const handleResetFilters = () => {
+    setStatusFilter('all');
+    setPriorityFilter('all');
+    setSelectedEventFilter('all');
+    setSortBy('date');
+    setSearchQuery('');
+  };
 
   // Filter activities
   const filteredActivities = db.activities.filter((act) => {
@@ -105,38 +112,26 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({
   });
 
   const pendingCount = db.activities.filter((a) => !a.completed).length;
-  const completedCount = db.activities.filter((a) => a.completed).length;
-
-  const handleInlineSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inlineTitle.trim()) return;
-
-    onOpenQuickCreate('activity', inlineMomentId || undefined);
-    // If the modal opens, we can also let quick create handle it or trigger direct save.
-    // For directness, reset inline form:
-    setInlineTitle('');
-    setShowInlineForm(false);
-  };
 
   const getPriorityBadge = (priority: ActivityPriority) => {
     switch (priority) {
       case 'high':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200/60 dark:border-rose-900/40">
-            <Flag className="h-3 w-3" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded-md border border-rose-200/60 dark:border-rose-900/40">
+            <Flag className="h-2.5 w-2.5" />
             High
           </span>
         );
       case 'medium':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-900/40">
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-900/40">
             Medium
           </span>
         );
       case 'low':
       default:
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/60 px-2 py-0.5 rounded-md border border-slate-200/60 dark:border-slate-700/40">
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/60 px-1.5 py-0.5 rounded-md">
             Low
           </span>
         );
@@ -144,168 +139,258 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({
   };
 
   return (
-    <div className="space-y-5">
-      {/* Top Header Card */}
-      <div className="dn-card p-5 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                Activities & Daily Flow
-              </h1>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-900/40 tabular-nums">
-                {pendingCount} pending
+    <div className="space-y-5 pb-12 animate-fade-in">
+      {/* 1. Page Header with Exactly 1 Primary Action */}
+      <div className="flex items-center justify-between gap-4 pt-1">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Activities
+          </h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            {pendingCount} open tasks · Independent daily flow & checklist
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onOpenQuickCreate('activity')}
+          className="px-4 py-2 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] dark:hover:bg-[#84BD9A] text-white dark:text-[#101612] text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>New Activity</span>
+        </button>
+      </div>
+
+      {/* 2. Unobtrusive Search & Filter Row */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search activities..."
+            className="w-full pl-8.5 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#19211B] text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#286747]"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Filter Trigger Button */}
+        <button
+          type="button"
+          onClick={() => setFilterSheetOpen(true)}
+          className={`px-3 py-2 rounded-xl border text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shrink-0 ${
+            activeFiltersCount > 0
+              ? 'border-[#286747] dark:border-[#70A987] bg-[#286747]/10 dark:bg-[#70A987]/15 text-[#286747] dark:text-[#70A987]'
+              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-[#19211B] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Filter className="w-3.5 h-3.5" />
+          <span>Filter</span>
+          {activeFiltersCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612]">
+              {activeFiltersCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Active Filters Summary Strip */}
+      {(activeFiltersCount > 0 || searchQuery) && (
+        <div className="flex items-center justify-between text-xs px-1 text-slate-500 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span>Showing:</span>
+            {statusFilter !== 'all' && (
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium capitalize">
+                {statusFilter}
               </span>
+            )}
+            {priorityFilter !== 'all' && (
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium capitalize">
+                {priorityFilter} priority
+              </span>
+            )}
+            {selectedEventFilter !== 'all' && (
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium">
+                {selectedEventFilter === 'unlinked'
+                  ? 'Independent only'
+                  : selectedEventFilter === 'linked'
+                    ? 'Linked to event'
+                    : 'Specific event'}
+              </span>
+            )}
+            {sortBy !== 'date' && (
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium">
+                Sorted: {sortBy}
+              </span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleResetFilters}
+            className="text-[11px] font-semibold text-[#286747] dark:text-[#70A987] hover:underline shrink-0 ml-2"
+          >
+            Reset
+          </button>
+        </div>
+      )}
+
+      {/* Filter Bottom Sheet */}
+      <FilterSheet
+        open={filterSheetOpen}
+        activeCount={activeFiltersCount}
+        onClose={() => setFilterSheetOpen(false)}
+        onReset={handleResetFilters}
+        title="Filter & Sort Activities"
+      >
+        <div className="space-y-4">
+          {/* Status */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Completion Status
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'all', label: `All (${db.activities.length})` },
+                { id: 'pending', label: `Pending (${pendingCount})` },
+                { id: 'completed', label: `Done (${db.activities.length - pendingCount})` },
+              ].map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setStatusFilter(st.id as any)}
+                  className={`py-1.5 px-2 rounded-xl text-xs font-medium text-center transition-colors ${
+                    statusFilter === st.id
+                      ? 'bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] font-semibold'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
             </div>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
-              Independent activities and checklists. Link to occasions optionally whenever helpful.
-            </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onOpenQuickCreate('activity')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] dark:hover:bg-[#84BD9A] text-white dark:text-[#101612] text-xs sm:text-sm font-semibold shadow-xs transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              <span>New Activity</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Search & Filter Bar */}
-        <div className="mt-5 pt-4 border-t border-slate-200/60 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-12 gap-3">
-          {/* Search input */}
-          <div className="relative sm:col-span-5">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search activities..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3.5 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-[#286747]"
-            />
+          {/* Priority */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Priority
+            </label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {['all', 'high', 'medium', 'low'].map((pr) => (
+                <button
+                  key={pr}
+                  type="button"
+                  onClick={() => setPriorityFilter(pr)}
+                  className={`py-1.5 px-2 rounded-xl text-xs font-medium capitalize text-center transition-colors ${
+                    priorityFilter === pr
+                      ? 'bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] font-semibold'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {pr}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Status buttons */}
-          <div className="sm:col-span-4 flex items-center gap-1 bg-slate-100/70 dark:bg-slate-800/60 p-1 rounded-xl">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                statusFilter === 'all'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              All ({db.activities.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('pending')}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                statusFilter === 'pending'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              Pending ({pendingCount})
-            </button>
-            <button
-              onClick={() => setStatusFilter('completed')}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                statusFilter === 'completed'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              Done ({completedCount})
-            </button>
-          </div>
-
-          {/* Priority filter */}
-          <div className="sm:col-span-3">
-            <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 focus:outline-none"
-            >
-              <option value="all">Any Priority</option>
-              <option value="high">High Priority</option>
-              <option value="medium">Medium Priority</option>
-              <option value="low">Low Priority</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Secondary filters: Event link & Sort */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
-          <div className="flex items-center gap-2">
-            <span>Filter by Occasion:</span>
+          {/* Occasion Association */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Occasion Association
+            </label>
             <select
               value={selectedEventFilter}
               onChange={(e) => setSelectedEventFilter(e.target.value)}
-              className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none"
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
             >
-              <option value="all">All Occasions</option>
-              <option value="unlinked">Unlinked (Independent only)</option>
-              <option value="linked">Linked to any Occasion</option>
+              <option value="all">All Activities (Any or None)</option>
+              <option value="unlinked">Independent Only (Not linked to any event)</option>
+              <option value="linked">Linked to Any Occasion</option>
               {db.moments.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.title}
+                  Linked to: {m.title}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span>Sort by:</span>
-            <button
-              onClick={() => setSortBy('date')}
-              className={`px-2 py-0.5 rounded-md ${sortBy === 'date' ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-medium' : ''}`}
-            >
-              Date
-            </button>
-            <button
-              onClick={() => setSortBy('priority')}
-              className={`px-2 py-0.5 rounded-md ${sortBy === 'priority' ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-medium' : ''}`}
-            >
-              Priority
-            </button>
-            <button
-              onClick={() => setSortBy('alphabetical')}
-              className={`px-2 py-0.5 rounded-md ${sortBy === 'alphabetical' ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-medium' : ''}`}
-            >
-              Name
-            </button>
+          {/* Sort */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Sort Order
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'date', label: 'Due Date' },
+                { id: 'priority', label: 'Priority' },
+                { id: 'alphabetical', label: 'Title (A–Z)' },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSortBy(s.id as any)}
+                  className={`py-1.5 px-2 rounded-xl text-xs font-medium text-center transition-colors ${
+                    sortBy === s.id
+                      ? 'bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] font-semibold'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      </FilterSheet>
 
-      {/* Activity List */}
+      {/* 3. Activities List */}
       {sortedActivities.length === 0 ? (
         <div className="dn-card p-10 text-center">
-          <div className="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#286747] dark:text-[#70A987] flex items-center justify-center mx-auto mb-3">
-            <CheckCircle2 className="h-6 w-6" />
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] flex items-center justify-center mx-auto mb-3">
+            <CheckCircle2 className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-            {searchQuery || statusFilter !== 'all' || priorityFilter !== 'all'
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+            {searchQuery || activeFiltersCount > 0
               ? 'No matching activities'
-              : 'No activities created yet'}
-          </h3>
+              : 'All caught up! No tasks left'}
+          </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-            {searchQuery
-              ? 'Try adjusting your search terms or filters.'
-              : 'Add stand-alone activities, tasks, or preparation items anytime without needing an event.'}
+            {searchQuery || activeFiltersCount > 0
+              ? 'Try modifying your search or clearing active filters.'
+              : 'Add personal tasks or preparation items anytime without needing an event.'}
           </p>
-          <button
-            onClick={() => onOpenQuickCreate('activity')}
-            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612]"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Create First Activity
-          </button>
+          <div className="mt-4">
+            {searchQuery || activeFiltersCount > 0 ? (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                Clear Filters
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onOpenQuickCreate('activity')}
+                className="px-4 py-2 rounded-xl bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] text-xs font-semibold shadow-xs"
+              >
+                + Add Activity
+              </button>
+            )}
+          </div>
         </div>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           {sortedActivities.map((act) => {
             const linkedMoment = act.momentId
               ? db.moments.find((m) => m.id === act.momentId)
@@ -316,29 +401,30 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({
               <div
                 key={act.id}
                 className={`dn-card p-3.5 sm:p-4 transition-all hover:border-[#286747]/40 dark:hover:border-[#70A987]/40 ${
-                  act.completed ? 'opacity-70 bg-slate-50/50 dark:bg-slate-900/40' : ''
+                  act.completed ? 'opacity-65 bg-slate-50/50 dark:bg-slate-900/30' : ''
                 }`}
               >
                 <div className="flex items-start gap-3">
                   {/* Completion Checkbox */}
                   <button
+                    type="button"
                     onClick={() => onToggleActivity(act.id)}
                     className="mt-0.5 shrink-0 text-slate-400 hover:text-[#286747] dark:hover:text-[#70A987] transition-colors focus:outline-none"
                     title={act.completed ? 'Mark incomplete' : 'Mark completed'}
                   >
                     {act.completed ? (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      <CheckCircle2 className="h-5 w-5 text-[#286747] dark:text-[#70A987]" />
                     ) : (
-                      <Circle className="h-5 w-5 text-slate-300 dark:text-slate-600 hover:text-emerald-600" />
+                      <Circle className="h-5 w-5 text-slate-300 dark:text-slate-600 hover:text-[#286747]" />
                     )}
                   </button>
 
                   {/* Activity Details */}
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 justify-between">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span
-                          className={`text-sm font-semibold ${
+                          className={`text-xs sm:text-sm font-semibold truncate ${
                             act.completed
                               ? 'line-through text-slate-400 dark:text-slate-500'
                               : 'text-slate-900 dark:text-slate-100'
@@ -351,12 +437,12 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({
 
                       {/* Due date tag */}
                       {act.date && (
-                        <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                          <Clock className="h-3.5 w-3.5" />
+                        <div className="flex items-center gap-1 text-[11px] text-slate-400 shrink-0">
+                          <Clock className="h-3 w-3" />
                           <span>{formatDate(act.date, db.settings.dateFormat)}</span>
                           {daysUntil !== null && !act.completed && (
                             <span
-                              className={`text-[11px] font-medium px-1.5 py-0.2 rounded-md ${
+                              className={`font-medium px-1.5 py-0.2 rounded-md ${
                                 daysUntil < 0
                                   ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60'
                                   : daysUntil === 0
@@ -371,42 +457,43 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({
                       )}
                     </div>
 
-                    {/* Optional description (if detailed card mode or present) */}
+                    {/* Description */}
                     {act.description && cardStyle === 'detailed' && (
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 line-clamp-2">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
                         {act.description}
                       </p>
                     )}
 
-                    {/* Metadata & Optional Relationships (Quiet, unobtrusive pills) */}
-                    <div className="mt-2.5 flex flex-wrap items-center gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
-                      {/* Linked Event Pill */}
+                    {/* Metadata & Optional Relationships */}
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/60 text-[11px]">
                       {linkedMoment ? (
                         <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#286747]/10 dark:bg-[#70A987]/15 text-[#194A35] dark:text-[#84BD9A] border border-[#286747]/20">
-                          <Link2 className="h-3 w-3" />
-                          <span>Occasion:</span>
+                          <Link2 className="h-2.5 w-2.5" />
+                          <span>Event:</span>
                           <button
+                            type="button"
                             onClick={() => onNavigateToEvent?.(linkedMoment.id)}
-                            className="font-medium hover:underline"
+                            className="font-medium hover:underline truncate max-w-[150px]"
                           >
                             {linkedMoment.title}
                           </button>
                         </div>
                       ) : (
                         <span className="text-slate-400 dark:text-slate-600">
-                          Independent task
+                          Independent activity
                         </span>
                       )}
 
-                      {/* Actions */}
-                      <div className="ml-auto flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
+                          type="button"
                           onClick={() => onEditActivity(act)}
-                          className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
+                          className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
                         >
                           Edit
                         </button>
                         <button
+                          type="button"
                           onClick={() => setActivityToDelete(act)}
                           className="text-xs text-rose-500 hover:text-rose-700"
                         >

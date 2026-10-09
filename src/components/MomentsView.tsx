@@ -10,12 +10,17 @@ import {
   Edit3,
   ExternalLink,
   FileText,
+  Filter,
   Gift,
   Heart,
   List,
+  MoreHorizontal,
   Plus,
+  RotateCcw,
   Search,
+  Sparkles,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
   ActivityRecord,
@@ -35,6 +40,7 @@ import {
   getTodayISO,
 } from '../utils/dnHelpers';
 import { ConfirmDialog } from './ConfirmDialog';
+import { FilterSheet } from './FilterSheet';
 import { QuickCreateMode } from './QuickCreateModal';
 
 interface MomentsViewProps {
@@ -89,9 +95,13 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
   const [sortBy, setSortBy] = useState<'upcoming' | 'recent' | 'title'>('upcoming');
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('overview');
 
-  const [showNewTypeInput, setShowNewTypeInput] = useState(false);
+  // Filter Sheet state
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
+  const [showAddTypeInput, setShowAddTypeInput] = useState(false);
 
+  // Detail workspace state
+  const [showDetailMoreMenu, setShowDetailMoreMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{
     kind: 'moment' | 'activity' | 'memory' | 'attachment';
     id: string;
@@ -104,8 +114,21 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
   const todayISO = getTodayISO();
   const { currency, dateFormat } = db.settings;
 
+  const activeFiltersCount =
+    (typeFilter !== 'all' ? 1 : 0) +
+    (statusFilter !== 'all' ? 1 : 0) +
+    (sortBy !== 'upcoming' ? 1 : 0);
+
+  const handleResetFilters = () => {
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setSortBy('upcoming');
+    setSearchQuery('');
+  };
+
   const selectedMoment = db.moments.find((m) => m.id === selectedMomentId) || null;
 
+  // Selected Moment Workspace / Detail View
   if (selectedMoment) {
     const nextOccurrence = getNextOccurrenceDate(selectedMoment, todayISO);
     const daysUntil = getDaysUntil(nextOccurrence, todayISO);
@@ -167,274 +190,321 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
     ].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
     return (
-      <div className="space-y-6 pb-12">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="space-y-5 pb-12 animate-fade-in">
+        {/* Navigation & Actions Header */}
+        <div className="flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => onSelectMoment(null)}
-            className="min-h-[44px] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#19211B] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>All Moments</span>
+            <span>All Events</span>
           </button>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onOpenGreetingsForMoment(selectedMoment)}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-medium text-violet-700 dark:text-violet-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-            >
-              <Gift className="w-4 h-4" />
-              <span>Greeting Card</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onDuplicateMoment(selectedMoment)}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-            >
-              <Copy className="w-4 h-4" />
-              <span>Duplicate</span>
-            </button>
-
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => onEditMoment(selectedMoment)}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+              className="px-3.5 py-1.5 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] text-white dark:text-[#101612] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
             >
-              <Edit3 className="w-4 h-4" />
-              <span>Edit</span>
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Edit Event</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() =>
-                setConfirmDelete({
-                  kind: 'moment',
-                  id: selectedMoment.id,
-                  title: selectedMoment.title,
-                })
-              }
-              className="min-h-[44px] px-3.5 py-2 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-slate-900 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Delete</span>
-            </button>
+            {/* Contextual More Actions */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowDetailMoreMenu(!showDetailMoreMenu)}
+                className="h-8.5 w-8.5 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                aria-label="More options"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+
+              {showDetailMoreMenu && (
+                <div
+                  className="absolute right-0 mt-1.5 w-48 rounded-xl bg-white dark:bg-[#19211B] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-30 animate-fade-in"
+                  onClick={() => setShowDetailMoreMenu(false)}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onOpenGreetingsForMoment(selectedMoment)}
+                    className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+                  >
+                    <Gift className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>Greeting Card</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onDuplicateMoment(selectedMoment)}
+                    className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Duplicate</span>
+                  </button>
+
+                  <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setConfirmDelete({
+                        kind: 'moment',
+                        id: selectedMoment.id,
+                        title: selectedMoment.title,
+                      })
+                    }
+                    className="w-full px-3.5 py-2 text-left text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Event</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6 sm:p-8">
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-            <div className="space-y-2 max-w-2xl">
+        {/* Event Header Banner */}
+        <section className="dn-card p-5 sm:p-6">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            <div className="space-y-1.5 max-w-2xl">
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                <span className="font-semibold text-[#286747] dark:text-[#70A987] px-2 py-0.5 rounded-md bg-[#286747]/10 dark:bg-[#70A987]/15">
                   {selectedMoment.type}
                 </span>
-                <span aria-hidden="true">·</span>
+                <span>·</span>
                 <span className="font-mono">
-                  Next: {formatDate(nextOccurrence, dateFormat)}
+                  {formatDate(nextOccurrence, dateFormat)}
                   {selectedMoment.time ? ` at ${selectedMoment.time}` : ''}
                 </span>
-                <span aria-hidden="true">·</span>
+                <span>·</span>
                 <span className="capitalize">
                   {selectedMoment.recurrence === 'none'
-                    ? 'One-time occasion'
+                    ? 'One-time event'
                     : `Repeats ${selectedMoment.recurrence}`}
-                </span>
-                <span aria-hidden="true">·</span>
-                <span className="font-mono font-medium text-slate-800 dark:text-slate-200">
-                  {getRelativeDayText(daysUntil)}
                 </span>
               </div>
 
-              <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 dark:text-white text-balance">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
                 {selectedMoment.title}
               </h1>
 
               {selectedMoment.description && (
-                <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed pt-0.5">
                   {selectedMoment.description}
                 </p>
               )}
             </div>
 
-            <div className="flex flex-col sm:items-end gap-2 shrink-0">
-              <label className="text-xs text-slate-500 dark:text-slate-400">
-                Moment Status
-              </label>
-              <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800">
-                {(['upcoming', 'in-progress', 'completed', 'cancelled'] as MomentStatus[]).map(
-                  (st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => onUpdateMomentStatus(selectedMoment.id, st)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors whitespace-nowrap shrink-0 ${
-                        selectedMoment.status === st
-                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      {st.replace('-', ' ')}
-                    </button>
-                  )
-                )}
+            {/* Countdown Badge & Status */}
+            <div className="flex flex-col items-start md:items-end gap-2 shrink-0">
+              <div className="px-3.5 py-1.5 rounded-xl bg-[#286747]/10 dark:bg-[#70A987]/15 border border-[#286747]/20 dark:border-[#70A987]/30 text-[#286747] dark:text-[#70A987] font-semibold text-xs tabular-nums">
+                {getRelativeDayText(daysUntil)}
               </div>
+
+              <select
+                value={selectedMoment.status}
+                onChange={(e) => onUpdateMomentStatus(selectedMoment.id, e.target.value as MomentStatus)}
+                className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#19211B] text-slate-700 dark:text-slate-300 focus:outline-none"
+              >
+                <option value="upcoming">Upcoming</option>
+                <option value="in-progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
             </div>
           </div>
 
-          <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-800 overflow-x-auto">
-            <div className="flex items-center gap-2 min-w-max">
-              {(
-                [
-                  { id: 'overview', label: 'Overview' },
-                  {
-                    id: 'activities',
-                    label: `Activities (${completedCount}/${momentActivities.length})`,
-                  },
-                  { id: 'timeline', label: `Timeline (${combinedTimeline.length})` },
-                  { id: 'memories', label: `Memories (${momentMemories.length})` },
-                  { id: 'attachments', label: `Attachments (${momentAttachments.length})` },
-                ] as { id: WorkspaceTab; label: string }[]
-              ).map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setWorkspaceTab(tab.id)}
-                  className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                    workspaceTab === tab.id
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+          {/* Sub Navigation Tabs */}
+          <div className="mt-5 pt-3 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center gap-1 overflow-x-auto text-xs">
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('overview')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                workspaceTab === 'overview'
+                  ? 'bg-[#286747]/10 dark:bg-[#70A987]/15 text-[#286747] dark:text-[#70A987] font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('activities')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                workspaceTab === 'activities'
+                  ? 'bg-[#286747]/10 dark:bg-[#70A987]/15 text-[#286747] dark:text-[#70A987] font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Activities ({momentActivities.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('memories')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                workspaceTab === 'memories'
+                  ? 'bg-[#286747]/10 dark:bg-[#70A987]/15 text-[#286747] dark:text-[#70A987] font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Memories ({momentMemories.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('attachments')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                workspaceTab === 'attachments'
+                  ? 'bg-[#286747]/10 dark:bg-[#70A987]/15 text-[#286747] dark:text-[#70A987] font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Files ({momentAttachments.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('timeline')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                workspaceTab === 'timeline'
+                  ? 'bg-[#286747]/10 dark:bg-[#70A987]/15 text-[#286747] dark:text-[#70A987] font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Timeline ({combinedTimeline.length})
+            </button>
           </div>
         </section>
 
+        {/* Tab 1: Overview */}
         {workspaceTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-7 space-y-6">
-              <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            <div className="lg:col-span-7 space-y-5">
+              {/* Personal Notes */}
+              <section className="dn-card p-5">
                 <div className="flex items-center justify-between gap-4 mb-3">
-                  <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-                    Personal Notes & Planning Ideas
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+                    Personal Notes & Ideas
                   </h2>
-                  {editingNotesId !== selectedMoment.id ? (
+                  {editingNotesId !== selectedMoment.id && (
                     <button
                       type="button"
                       onClick={() => {
                         setEditingNotesId(selectedMoment.id);
                         setNotesDraft(selectedMoment.notes || '');
                       }}
-                      className="min-h-[36px] px-3 py-1 rounded-lg text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50"
+                      className="text-xs font-semibold text-[#286747] dark:text-[#70A987] hover:underline"
                     >
-                      Edit Notes
+                      {selectedMoment.notes ? 'Edit Notes' : '+ Add Notes'}
                     </button>
-                  ) : (
-                    <div className="flex items-center gap-2">
+                  )}
+                </div>
+
+                {editingNotesId === selectedMoment.id ? (
+                  <div className="space-y-3">
+                    <textarea
+                      value={notesDraft}
+                      onChange={(e) => setNotesDraft(e.target.value)}
+                      rows={4}
+                      placeholder="Jot down gift ideas, guest lists, reservation codes, or personal reminders..."
+                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#286747]"
+                    />
+                    <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => setEditingNotesId(null)}
-                        className="px-3 py-1 text-xs text-slate-500"
+                        className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                       >
                         Cancel
                       </button>
                       <button
                         type="button"
                         onClick={() => {
-                          onUpdateMomentNotes(selectedMoment.id, notesDraft);
+                          onUpdateMomentNotes(selectedMoment.id, notesDraft.trim());
                           setEditingNotesId(null);
                         }}
-                        className="px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-medium"
+                        className="px-3.5 py-1.5 rounded-lg bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] text-xs font-semibold"
                       >
-                        Save
+                        Save Notes
                       </button>
                     </div>
-                  )}
-                </div>
-
-                {editingNotesId === selectedMoment.id ? (
-                  <textarea
-                    rows={4}
-                    value={notesDraft}
-                    onChange={(e) => setNotesDraft(e.target.value)}
-                    placeholder="Add gift ideas, guest preferences, menus, or reminders..."
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 text-sm text-slate-900 dark:text-white focus:border-indigo-500 focus:outline-none"
-                  />
+                  </div>
                 ) : selectedMoment.notes ? (
-                  <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line">
+                  <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
                     {selectedMoment.notes}
                   </p>
                 ) : (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 italic">
-                    No personal notes added yet. Tap “Edit Notes” to jot down gift ideas or details.
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">
+                    No notes recorded yet.
                   </p>
                 )}
               </section>
 
-              <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-                <div className="flex items-center justify-between gap-4 mb-4">
+              {/* Linked Activities */}
+              <section className="dn-card p-5">
+                <div className="flex items-center justify-between gap-4 mb-3">
                   <div>
-                    <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-                      Preparation & Activities
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+                      Event Activities ({completedCount}/{momentActivities.length})
                     </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {completedCount} of {momentActivities.length} completed ({progressPct}%)
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Checklist items specifically linked to this occasion
                     </p>
                   </div>
+
                   <button
                     type="button"
                     onClick={() => onOpenQuickCreate('activity', selectedMoment.id)}
-                    className="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 whitespace-nowrap shrink-0"
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-[#286747] dark:text-[#70A987] hover:bg-[#286747]/10 transition-colors"
                   >
-                    + Add Activity
+                    + Add Task
                   </button>
                 </div>
 
                 {momentActivities.length > 0 && (
-                  <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden mb-4">
+                  <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden mb-3">
                     <div
-                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      className="h-full rounded-full bg-[#286747] dark:bg-[#70A987] transition-all"
                       style={{ width: `${progressPct}%` }}
                     />
                   </div>
                 )}
 
                 {momentActivities.length === 0 ? (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 py-4 text-center">
-                    No tasks linked to this moment yet.
+                  <p className="text-xs text-slate-400 dark:text-slate-500 py-3 text-center">
+                    No tasks linked to this event.
                   </p>
                 ) : (
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                    {momentActivities.slice(0, 4).map((act) => (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    {momentActivities.map((act) => (
                       <div
                         key={act.id}
-                        className="py-3 first:pt-1 last:pb-1 flex items-center justify-between gap-3"
+                        className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3"
                       >
                         <button
                           type="button"
                           onClick={() => onToggleActivity(act.id)}
-                          className="flex items-center gap-3 text-left min-w-0 flex-1"
+                          className="flex items-center gap-2.5 text-left min-w-0 flex-1"
                         >
                           {act.completed ? (
-                            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <CheckCircle2 className="w-4 h-4 text-[#286747] dark:text-[#70A987] shrink-0" />
                           ) : (
-                            <Circle className="w-5 h-5 text-slate-400 shrink-0" />
+                            <Circle className="w-4 h-4 text-slate-400 shrink-0" />
                           )}
                           <span
-                            className={`text-sm font-medium truncate ${
+                            className={`text-xs truncate ${
                               act.completed
                                 ? 'line-through text-slate-400 dark:text-slate-500'
-                                : 'text-slate-900 dark:text-white'
+                                : 'text-slate-800 dark:text-slate-200 font-medium'
                             }`}
                           >
                             {act.title}
                           </span>
                         </button>
-                        <span className="text-xs font-mono text-slate-500 dark:text-slate-400 shrink-0">
+                        <span className="text-[11px] font-mono text-slate-400 shrink-0">
                           {formatDate(act.date, dateFormat)}
                         </span>
                       </div>
@@ -444,49 +514,44 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
               </section>
             </div>
 
-            <div className="lg:col-span-5 space-y-6">
-              <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-                <div className="flex items-center justify-between gap-4 mb-4">
-                  <div>
-                    <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-                      Associated Expenses
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Total recorded spend for this occasion
-                    </p>
-                  </div>
+            {/* Right Column: Financials & Vault Summary */}
+            <div className="lg:col-span-5 space-y-5">
+              <section className="dn-card p-5">
+                <div className="flex items-center justify-between gap-4 mb-2">
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+                    Occasion Expenses
+                  </h2>
                   <button
                     type="button"
                     onClick={() => onOpenQuickCreate('expense', selectedMoment.id)}
-                    className="min-h-[40px] px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap shrink-0"
+                    className="text-xs font-semibold text-[#286747] dark:text-[#70A987] hover:underline"
                   >
                     + Log Expense
                   </button>
                 </div>
 
-                <div className="py-2">
-                  <p className="text-2xl font-mono font-semibold text-slate-900 dark:text-white tabular-nums">
+                <div className="py-1">
+                  <p className="text-xl font-mono font-bold text-slate-900 dark:text-white tabular-nums">
                     {formatCurrency(totalMomentSpend, currency)}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Across {momentExpenses.length}{' '}
-                    {momentExpenses.length === 1 ? 'recorded entry' : 'recorded entries'}
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Across {momentExpenses.length} recorded {momentExpenses.length === 1 ? 'entry' : 'entries'}
                   </p>
                 </div>
 
                 {momentExpenses.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/70 divide-y divide-slate-100 dark:divide-slate-800/70">
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/60 divide-y divide-slate-100 dark:divide-slate-800/60">
                     {momentExpenses.map((exp) => (
                       <div
                         key={exp.id}
                         onClick={() => onEditFinance(exp)}
-                        className="py-2.5 flex items-center justify-between gap-3 cursor-pointer hover:opacity-80"
+                        className="py-2 flex items-center justify-between gap-3 cursor-pointer hover:opacity-80"
                       >
                         <div className="min-w-0">
                           <p className="text-xs font-medium text-slate-900 dark:text-white truncate">
                             {exp.title}
                           </p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          <p className="text-[11px] text-slate-400">
                             {exp.category} · {formatDate(exp.date, dateFormat)}
                           </p>
                         </div>
@@ -499,33 +564,34 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
                 )}
               </section>
 
-              <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6 space-y-4">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              {/* Linked Items Quick Links */}
+              <section className="dn-card p-5 space-y-3">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
                   Preserved Memories & Files
                 </h2>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => setWorkspaceTab('memories')}
-                    className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   >
-                    <Heart className="w-4 h-4 text-rose-500 mb-1.5" />
-                    <p className="text-lg font-mono font-semibold text-slate-900 dark:text-white tabular-nums">
+                    <Heart className="w-4 h-4 text-rose-500 mb-1" />
+                    <p className="text-base font-mono font-bold text-slate-900 dark:text-white tabular-nums">
                       {momentMemories.length}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Linked Memories</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Memories</p>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setWorkspaceTab('attachments')}
-                    className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   >
-                    <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400 mb-1.5" />
-                    <p className="text-lg font-mono font-semibold text-slate-900 dark:text-white tabular-nums">
+                    <FileText className="w-4 h-4 text-[#286747] dark:text-[#70A987] mb-1" />
+                    <p className="text-base font-mono font-bold text-slate-900 dark:text-white tabular-nums">
                       {momentAttachments.length}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Attachments</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Files & Links</p>
                   </button>
                 </div>
               </section>
@@ -533,153 +599,86 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
           </div>
         )}
 
+        {/* Tab 2: Activities */}
         {workspaceTab === 'activities' && (
-          <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <section className="dn-card p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Moment Activities & Checklist
+                <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                  Event Checklist
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {completedCount} of {momentActivities.length} completed ({progressPct}%)
+                  {completedCount} of {momentActivities.length} items completed
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => onOpenQuickCreate('activity', selectedMoment.id)}
-                className="min-h-[44px] px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                className="px-3.5 py-1.5 rounded-xl bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] text-xs font-semibold inline-flex items-center gap-1.5"
               >
-                <Plus className="w-4 h-4" />
-                <span>New Activity</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Task</span>
               </button>
             </div>
 
             {momentActivities.length === 0 ? (
-              <div className="py-12 text-center space-y-3">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  No activities created for this moment yet
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                  Break down your preparation into simple tasks with target dates and priorities.
-                </p>
-              </div>
+              <p className="text-xs text-slate-400 py-8 text-center">
+                No tasks assigned to this occasion yet.
+              </p>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                {momentActivities.map((act) => {
-                  const linkedExp = db.finances.find((f) => f.id === act.expenseId);
-                  const linkedAtt = db.attachments.find((a) => a.id === act.attachmentId);
-                  return (
-                    <div
-                      key={act.id}
-                      className="py-4 first:pt-1 last:pb-1 flex items-start justify-between gap-4"
+                {momentActivities.map((act) => (
+                  <div key={act.id} className="py-3 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => onToggleActivity(act.id)}
+                      className="flex items-center gap-3 text-left min-w-0 flex-1"
                     >
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <button
-                          type="button"
-                          onClick={() => onToggleActivity(act.id)}
-                          className="min-h-[44px] min-w-[44px] -ml-2 -mt-2 flex items-center justify-center text-slate-400 hover:text-indigo-600 shrink-0"
+                      {act.completed ? (
+                        <CheckCircle2 className="w-4.5 h-4.5 text-[#286747] dark:text-[#70A987] shrink-0" />
+                      ) : (
+                        <Circle className="w-4.5 h-4.5 text-slate-400 shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <p
+                          className={`text-xs sm:text-sm font-medium truncate ${
+                            act.completed
+                              ? 'line-through text-slate-400 dark:text-slate-500'
+                              : 'text-slate-900 dark:text-white'
+                          }`}
                         >
-                          {act.completed ? (
-                            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                          ) : (
-                            <Circle className="w-5 h-5" />
-                          )}
-                        </button>
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className={`text-sm font-semibold ${
-                              act.completed
-                                ? 'line-through text-slate-400 dark:text-slate-500'
-                                : 'text-slate-900 dark:text-white'
-                            }`}
-                          >
-                            {act.title}
-                          </p>
-                          {act.description && (
-                            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                              {act.description}
-                            </p>
-                          )}
-                          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                            <span className="font-mono">{formatDate(act.date, dateFormat)}</span>
-                            <span aria-hidden="true">·</span>
-                            <span className="capitalize">{act.priority} priority</span>
-                            {linkedExp && (
-                              <>
-                                <span aria-hidden="true">·</span>
-                                <span className="font-mono text-rose-600 dark:text-rose-400">
-                                  Expense: {formatCurrency(linkedExp.amount, currency)}
-                                </span>
-                              </>
-                            )}
-                            {linkedAtt && (
-                              <>
-                                <span aria-hidden="true">·</span>
-                                <span className="text-indigo-600 dark:text-indigo-400">
-                                  File: {linkedAtt.name}
-                                </span>
-                              </>
-                            )}
-                          </div>
+                          {act.title}
+                        </p>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                          <span className="font-mono">{formatDate(act.date, dateFormat)}</span>
+                          <span>·</span>
+                          <span className="capitalize">{act.priority} priority</span>
                         </div>
                       </div>
+                    </button>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => onEditActivity(act)}
-                          className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                          aria-label="Edit activity"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setConfirmDelete({
-                              kind: 'activity',
-                              id: act.id,
-                              title: act.title,
-                            })
-                          }
-                          className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600"
-                          aria-label="Delete activity"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onEditActivity(act)}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConfirmDelete({
+                            kind: 'activity',
+                            id: act.id,
+                            title: act.title,
+                          })
+                        }
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        )}
-
-        {workspaceTab === 'timeline' && (
-          <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">
-              Chronological Moment Timeline
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-6">
-              Complete history of updates, completed tasks, memories, attachments, and expenses for this moment
-            </p>
-
-            {combinedTimeline.length === 0 ? (
-              <p className="text-xs text-slate-500 py-6 text-center">No timeline activity recorded yet.</p>
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                {combinedTimeline.map((item) => (
-                  <div key={item.id} className="py-3.5 flex items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-                        {item.kind}
-                      </p>
-                      <p className="text-sm text-slate-900 dark:text-white">{item.label}</p>
-                    </div>
-                    <span className="text-xs font-mono text-slate-500 dark:text-slate-400 shrink-0">
-                      {formatDate(item.timestamp.slice(0, 10), dateFormat)}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -687,191 +686,132 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
           </section>
         )}
 
+        {/* Tab 3: Memories */}
         {workspaceTab === 'memories' && (
-          <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <section className="dn-card p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Memories From This Moment
+                <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                  Preserved Memories
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Written stories, captions, and photographs preserved for this occasion
+                  Stories and photos linked to this occasion
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => onOpenQuickCreate('memory', selectedMoment.id)}
-                className="min-h-[44px] px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                className="px-3.5 py-1.5 rounded-xl bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] text-xs font-semibold inline-flex items-center gap-1.5"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" />
                 <span>Add Memory</span>
               </button>
             </div>
 
             {momentMemories.length === 0 ? (
-              <div className="py-12 text-center space-y-2">
-                <Heart className="w-7 h-7 text-slate-300 dark:text-slate-600 mx-auto" />
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  No memories linked to this moment yet
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                  Capture a photo or write down a favorite story from this occasion.
-                </p>
-              </div>
+              <p className="text-xs text-slate-400 py-8 text-center">
+                No memories saved for this occasion yet.
+              </p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {momentMemories.map((mem) => (
-                  <article
+                  <div
                     key={mem.id}
-                    className="rounded-xl bg-slate-50/70 dark:bg-slate-800/40 overflow-hidden flex flex-col justify-between"
+                    className="rounded-xl border border-slate-200/80 dark:border-slate-800 p-4 space-y-2 bg-slate-50/50 dark:bg-slate-900/40"
                   >
-                    <div>
-                      {mem.photoUrl && (
-                        <img
-                          src={mem.photoUrl}
-                          alt={mem.title}
-                          referrerPolicy="no-referrer"
-                          className="w-full h-48 object-cover"
-                        />
-                      )}
-                      <div className="p-5">
-                        <p className="text-xs font-mono text-slate-500 dark:text-slate-400">
-                          {formatDate(mem.date, dateFormat)}
-                          {mem.location ? ` · ${mem.location}` : ''}
-                        </p>
-                        <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-white">
-                          {mem.title}
-                        </h3>
-                        <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                          {mem.description}
-                        </p>
-                        {mem.caption && (
-                          <p className="mt-2 text-xs italic text-slate-500 dark:text-slate-400">
-                            “{mem.caption}”
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="px-5 py-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-end gap-3">
+                    {mem.photoUrl && (
+                      <img
+                        src={mem.photoUrl}
+                        alt={mem.title}
+                        className="w-full h-36 object-cover rounded-lg"
+                      />
+                    )}
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                      {mem.title}
+                    </h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-3">
+                      {mem.description}
+                    </p>
+                    <div className="pt-2 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>{formatDate(mem.date, dateFormat)}</span>
                       <button
                         type="button"
                         onClick={() => onEditMemory(mem)}
-                        className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                        className="text-[#286747] dark:text-[#70A987] hover:underline"
                       >
                         Edit
                       </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setConfirmDelete({
-                            kind: 'memory',
-                            id: mem.id,
-                            title: mem.title,
-                          })
-                        }
-                        className="text-xs font-medium text-rose-600 dark:text-rose-400 hover:underline"
-                      >
-                        Delete
-                      </button>
                     </div>
-                  </article>
+                  </div>
                 ))}
               </div>
             )}
           </section>
         )}
 
+        {/* Tab 4: Attachments */}
         {workspaceTab === 'attachments' && (
-          <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <section className="dn-card p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Moment Attachments & Links
+                <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                  Event Files & Links
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Receipts, invitations, photos, and external reference links for this occasion
+                  Documents, tickets, and photos stored for this occasion
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => onOpenQuickCreate('attachment', selectedMoment.id)}
-                className="min-h-[44px] px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                className="px-3.5 py-1.5 rounded-xl bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] text-xs font-semibold inline-flex items-center gap-1.5"
               >
-                <Plus className="w-4 h-4" />
-                <span>Add Attachment</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add File</span>
               </button>
             </div>
 
             {momentAttachments.length === 0 ? (
-              <div className="py-12 text-center space-y-2">
-                <FileText className="w-7 h-7 text-slate-300 dark:text-slate-600 mx-auto" />
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  No attachments linked to this moment
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                  Attach tickets, receipts, photos, or helpful web links so everything stays in one place.
-                </p>
-              </div>
+              <p className="text-xs text-slate-400 py-8 text-center">
+                No files linked to this event.
+              </p>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
                 {momentAttachments.map((att) => (
-                  <div
-                    key={att.id}
-                    className="py-4 first:pt-1 last:pb-1 flex items-center justify-between gap-4"
-                  >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      {(att.kind === 'photo' || att.kind === 'camera') && att.url ? (
-                        <img
-                          src={att.url}
-                          alt={att.name}
-                          referrerPolicy="no-referrer"
-                          className="w-12 h-12 rounded-lg object-cover shrink-0 border border-slate-200 dark:border-slate-700"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                          <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                        </div>
-                      )}
+                  <div key={att.id} className="py-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4" />
+                      </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                        <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
                           {att.name}
                         </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                        <p className="text-[11px] text-slate-400 capitalize">
                           {att.kind}
-                          {att.description ? ` · ${att.description}` : ''}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {att.kind === 'link' ? (
                         <a
                           href={att.url}
                           target="_blank"
-                          rel="noopener noreferrer"
-                          className="min-h-[40px] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-indigo-600 dark:text-indigo-400 inline-flex items-center gap-1"
+                          rel="noreferrer"
+                          className="px-2 py-1 text-xs text-[#286747] dark:text-[#70A987] hover:underline"
                         >
-                          <span>Open</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          Open
                         </a>
                       ) : (
                         <a
                           href={att.url}
                           download={att.name}
-                          className="min-h-[40px] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 inline-flex items-center gap-1"
+                          className="px-2 py-1 text-xs text-[#286747] dark:text-[#70A987] hover:underline"
                         >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Save</span>
+                          Save
                         </a>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => onEditAttachment(att)}
-                        className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                        aria-label="Edit attachment"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
                       <button
                         type="button"
                         onClick={() =>
@@ -881,10 +821,9 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
                             title: att.name,
                           })
                         }
-                        className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600"
-                        aria-label="Delete attachment"
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded-md"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -894,10 +833,39 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
           </section>
         )}
 
+        {/* Tab 5: Timeline */}
+        {workspaceTab === 'timeline' && (
+          <section className="dn-card p-5 sm:p-6 space-y-4">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Event History & Updates
+            </h2>
+            {combinedTimeline.length === 0 ? (
+              <p className="text-xs text-slate-400 py-6 text-center">No timeline activity logged.</p>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                {combinedTimeline.map((item) => (
+                  <div key={item.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                    <div>
+                      <span className="font-semibold text-[#286747] dark:text-[#70A987] mr-2">
+                        {item.kind}
+                      </span>
+                      <span className="text-slate-800 dark:text-slate-200">{item.label}</span>
+                    </div>
+                    <span className="font-mono text-slate-400 shrink-0">
+                      {formatDate(item.timestamp.slice(0, 10), dateFormat)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Deletion Dialog */}
         <ConfirmDialog
           open={!!confirmDelete}
           title={`Delete ${confirmDelete?.kind || 'item'}?`}
-          description={`Are you sure you want to permanently delete "${confirmDelete?.title}"? Related records will remain safe and cleanly unlinked.`}
+          description={`Are you sure you want to permanently delete "${confirmDelete?.title}"? Related independent records will remain safe.`}
           confirmLabel="Delete"
           onCancel={() => setConfirmDelete(null)}
           onConfirm={() => {
@@ -919,6 +887,7 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
     );
   }
 
+  // ALL EVENTS LIST VIEW
   const allMomentTypes = db.settings.momentTypes.filter((t) => t.enabled);
 
   const enrichedMoments = db.moments.map((moment) => {
@@ -948,6 +917,7 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
     .filter(({ moment }) => {
       if (typeFilter !== 'all' && moment.type !== typeFilter) return false;
       if (statusFilter !== 'all' && moment.status !== statusFilter) return false;
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
@@ -973,190 +943,304 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
     });
 
   return (
-    <div className="space-y-6 pb-12">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-2">
+    <div className="space-y-5 pb-12 animate-fade-in">
+      {/* 1. Page Header with Exactly 1 Primary Action */}
+      <div className="flex items-center justify-between gap-4 pt-1">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">
-            Moments & Important Dates
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Events & Occasions
           </h1>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            Organize birthdays, anniversaries, festivals, milestones, and dedicated preparation workspaces.
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            {db.moments.length} saved occasions · Birthdays, anniversaries & milestones
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={() => onOpenQuickCreate('moment')}
+          className="px-4 py-2 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] dark:hover:bg-[#84BD9A] text-white dark:text-[#101612] text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>New Event</span>
+        </button>
+      </div>
+
+      {/* 2. Unobtrusive Filter & Search Row */}
+      <div className="flex items-center gap-2">
+        {/* Search */}
+        <div className="relative flex-1">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search events..."
+            className="w-full pl-8.5 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#19211B] text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#286747]"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Filter Trigger Button with Count Badge */}
+        <button
+          type="button"
+          onClick={() => setFilterSheetOpen(true)}
+          className={`px-3 py-2 rounded-xl border text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shrink-0 ${
+            activeFiltersCount > 0
+              ? 'border-[#286747] dark:border-[#70A987] bg-[#286747]/10 dark:bg-[#70A987]/15 text-[#286747] dark:text-[#70A987]'
+              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-[#19211B] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Filter className="w-3.5 h-3.5" />
+          <span>Filter</span>
+          {activeFiltersCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612]">
+              {activeFiltersCount}
+            </span>
+          )}
+        </button>
+
+        {/* List / Timeline View Switch */}
+        <div className="flex items-center p-0.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#19211B] shrink-0">
           <button
             type="button"
-            onClick={() => setShowNewTypeInput(!showNewTypeInput)}
-            className="min-h-[44px] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0"
+            onClick={() => setViewLayout('list')}
+            className={`p-1.5 rounded-lg transition-colors ${
+              viewLayout === 'list'
+                ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+            title="List view"
           >
-            + Custom Type
+            <List className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
-            onClick={() => onOpenQuickCreate('moment')}
-            className="min-h-[44px] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium inline-flex items-center gap-2 shadow-xs transition-colors whitespace-nowrap shrink-0"
+            onClick={() => setViewLayout('timeline')}
+            className={`p-1.5 rounded-lg transition-colors ${
+              viewLayout === 'timeline'
+                ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+            title="Timeline view"
           >
-            <Plus className="w-4 h-4" />
-            <span>New Moment</span>
+            <Clock className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {showNewTypeInput && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (newTypeName.trim()) {
-              onAddCustomMomentType(newTypeName.trim());
-              setTypeFilter(newTypeName.trim());
-              setNewTypeName('');
-              setShowNewTypeInput(false);
-            }
-          }}
-          className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 flex flex-wrap items-center gap-3"
-        >
-          <input
-            type="text"
-            value={newTypeName}
-            onChange={(e) => setNewTypeName(e.target.value)}
-            placeholder="Enter custom moment type (e.g., Cultural Event, Reunion, Health Milestone)..."
-            className="flex-1 min-w-[220px] min-h-[40px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2 text-xs text-slate-900 dark:text-white"
-            required
-          />
-          <button
-            type="submit"
-            className="min-h-[40px] px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium"
-          >
-            Add Type
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowNewTypeInput(false)}
-            className="min-h-[40px] px-3 py-2 text-xs text-slate-500"
-          >
-            Cancel
-          </button>
-        </form>
-      )}
-
-      <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 space-y-3">
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search moments by title, notes, or occasion type..."
-              className="w-full min-h-[44px] pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-sm text-slate-900 dark:text-white focus:border-indigo-500 focus:outline-none"
-            />
+      {/* Active Filters Summary Strip (Shown only when filtered) */}
+      {(activeFiltersCount > 0 || searchQuery) && (
+        <div className="flex items-center justify-between text-xs px-1 text-slate-500 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span>Showing:</span>
+            {typeFilter !== 'all' && (
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium">
+                Type: {typeFilter}
+              </span>
+            )}
+            {statusFilter !== 'all' && (
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium capitalize">
+                Status: {statusFilter}
+              </span>
+            )}
+            {sortBy !== 'upcoming' && (
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium">
+                Sorted: {sortBy === 'recent' ? 'Recently Added' : 'Title'}
+              </span>
+            )}
+            {searchQuery && (
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium">
+                &ldquo;{searchQuery}&rdquo;
+              </span>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Filter by status"
-              className="min-h-[44px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200"
-            >
-              <option value="all">All Statuses</option>
-              <option value="upcoming">Upcoming</option>
-              <option value="in-progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+          <button
+            type="button"
+            onClick={handleResetFilters}
+            className="text-[11px] font-semibold text-[#286747] dark:text-[#70A987] hover:underline shrink-0 ml-2"
+          >
+            Reset
+          </button>
+        </div>
+      )}
 
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'upcoming' | 'recent' | 'title')}
-              aria-label="Sort moments"
-              className="min-h-[44px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200"
-            >
-              <option value="upcoming">Sort: Next Occurrence</option>
-              <option value="recent">Sort: Recently Added</option>
-              <option value="title">Sort: Title (A–Z)</option>
-            </select>
+      {/* Filter Bottom Sheet */}
+      <FilterSheet
+        open={filterSheetOpen}
+        activeCount={activeFiltersCount}
+        onClose={() => setFilterSheetOpen(false)}
+        onReset={handleResetFilters}
+        title="Filter & Sort Events"
+      >
+        <div className="space-y-4">
+          {/* Status Selection */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Event Status
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {['all', 'upcoming', 'in-progress', 'completed', 'cancelled'].map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setStatusFilter(st)}
+                  className={`py-1.5 px-2 rounded-xl text-xs font-medium capitalize text-center transition-colors ${
+                    statusFilter === st
+                      ? 'bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] font-semibold'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {st === 'all' ? 'All' : st.replace('-', ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
 
-            <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800">
+          {/* Type / Occasion Selection */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Occasion Type
+              </label>
               <button
                 type="button"
-                onClick={() => setViewLayout('list')}
-                className={`min-h-[36px] px-3 py-1 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
-                  viewLayout === 'list'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-400'
-                }`}
+                onClick={() => setShowAddTypeInput(!showAddTypeInput)}
+                className="text-[11px] text-[#286747] dark:text-[#70A987] font-semibold hover:underline"
               >
-                <List className="w-3.5 h-3.5" />
-                <span>List</span>
+                + Custom Type
               </button>
+            </div>
+
+            {showAddTypeInput && (
+              <div className="mb-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex gap-2">
+                <input
+                  type="text"
+                  value={newTypeName}
+                  onChange={(e) => setNewTypeName(e.target.value)}
+                  placeholder="New type name..."
+                  className="flex-1 px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newTypeName.trim()) {
+                      onAddCustomMomentType(newTypeName.trim());
+                      setTypeFilter(newTypeName.trim());
+                      setNewTypeName('');
+                      setShowAddTypeInput(false);
+                    }
+                  }}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612]"
+                >
+                  Add
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pt-0.5">
               <button
                 type="button"
-                onClick={() => setViewLayout('timeline')}
-                className={`min-h-[36px] px-3 py-1 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
-                  viewLayout === 'timeline'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-400'
+                onClick={() => setTypeFilter('all')}
+                className={`py-1 px-2.5 rounded-lg text-xs font-medium transition-colors ${
+                  typeFilter === 'all'
+                    ? 'bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] font-semibold'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                 }`}
               >
-                <Clock className="w-3.5 h-3.5" />
-                <span>Timeline</span>
+                All Types
               </button>
+              {allMomentTypes.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTypeFilter(t.name)}
+                  className={`py-1 px-2.5 rounded-lg text-xs font-medium transition-colors ${
+                    typeFilter === t.name
+                      ? 'bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] font-semibold'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sort Order */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Sort Order
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'upcoming', label: 'Next Due' },
+                { id: 'recent', label: 'Recently Added' },
+                { id: 'title', label: 'Title (A–Z)' },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSortBy(s.id as any)}
+                  className={`py-1.5 px-2 rounded-xl text-xs font-medium text-center transition-colors ${
+                    sortBy === s.id
+                      ? 'bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] font-semibold'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
+      </FilterSheet>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto pt-1">
-          <button
-            type="button"
-            onClick={() => setTypeFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-              typeFilter === 'all'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70'
-            }`}
-          >
-            All Types ({db.moments.length})
-          </button>
-          {allMomentTypes.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTypeFilter(t.name)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                typeFilter === t.name
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70'
-              }`}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
-      </section>
-
+      {/* 3. Empty State */}
       {filteredMoments.length === 0 ? (
-        <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-12 text-center space-y-3">
-          <Calendar className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
-          <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-            No moments match your current view
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            Add important birthdays, family functions, festivals, or personal milestones to build your timeline.
-          </p>
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={() => onOpenQuickCreate('moment')}
-              className="min-h-[44px] px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700"
-            >
-              + Create Moment
-            </button>
+        <div className="dn-card p-10 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] flex items-center justify-center mx-auto mb-3">
+            <Calendar className="w-6 h-6" />
           </div>
-        </section>
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+            {searchQuery || activeFiltersCount > 0 ? 'No matching events found' : 'No events yet'}
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+            {searchQuery || activeFiltersCount > 0
+              ? 'Try adjusting your search query or reset your filters.'
+              : 'Add your first birthday, anniversary, or milestone to build your calm life timeline.'}
+          </p>
+          <div className="mt-4">
+            {searchQuery || activeFiltersCount > 0 ? (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                Clear Filters
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onOpenQuickCreate('moment')}
+                className="px-4 py-2 rounded-xl bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] text-xs font-semibold shadow-xs"
+              >
+                + Create Event
+              </button>
+            )}
+          </div>
+        </div>
       ) : viewLayout === 'list' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        /* List Mode: Clean, compact cards */
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {filteredMoments.map(
             ({
               moment,
@@ -1170,142 +1254,95 @@ export const MomentsView: React.FC<MomentsViewProps> = ({
               <article
                 key={moment.id}
                 onClick={() => onSelectMoment(moment.id)}
-                className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6 flex flex-col justify-between cursor-pointer hover:border-indigo-500/50 transition-colors group"
+                className="dn-card p-4.5 cursor-pointer hover:border-[#286747]/60 dark:hover:border-[#70A987]/60 transition-all flex flex-col justify-between group"
               >
                 <div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                        {moment.type}
-                      </span>
-                      <span aria-hidden="true">·</span>
-                      <span className="capitalize">{moment.status.replace('-', ' ')}</span>
-                      {moment.recurrence !== 'none' && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span className="capitalize">Repeats {moment.recurrence}</span>
-                        </>
-                      )}
-                    </div>
-                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-semibold text-[#286747] dark:text-[#70A987] px-2 py-0.5 rounded-md bg-[#286747]/10 dark:bg-[#70A987]/15">
+                      {moment.type}
+                    </span>
+
+                    <span className="font-mono text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                       {getRelativeDayText(daysUntil)}
                     </span>
                   </div>
 
-                  <h2 className="mt-2 text-lg font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  <h3 className="mt-2 text-base font-bold text-slate-900 dark:text-white group-hover:text-[#286747] dark:group-hover:text-[#70A987] transition-colors truncate">
                     {moment.title}
-                  </h2>
+                  </h3>
 
-                  <p className="mt-1 text-xs font-mono text-slate-500 dark:text-slate-400">
-                    Next occurrence: {formatDate(nextDate, dateFormat)}
+                  <p className="mt-0.5 text-xs font-mono text-slate-500 dark:text-slate-400">
+                    {formatDate(nextDate, dateFormat)}
                     {moment.time ? ` · ${moment.time}` : ''}
                   </p>
 
                   {moment.description && (
-                    <p className="mt-2.5 text-xs leading-relaxed text-slate-600 dark:text-slate-300 line-clamp-2">
+                    <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
                       {moment.description}
                     </p>
                   )}
                 </div>
 
-                <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800/70 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span>
-                      Tasks: {completedActivities}/{activitiesCount}
-                    </span>
-                    <span aria-hidden="true">·</span>
-                    <span>Memories: {memoriesCount}</span>
+                {/* Card Footer */}
+                <div className="mt-4 pt-2.5 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
+                  <div className="flex items-center gap-2">
+                    {activitiesCount > 0 && (
+                      <span>
+                        Tasks: {completedActivities}/{activitiesCount}
+                      </span>
+                    )}
+                    {memoriesCount > 0 && <span>· {memoriesCount} memories</span>}
                     {totalSpend > 0 && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span className="font-mono text-slate-700 dark:text-slate-300 tabular-nums">
-                          {formatCurrency(totalSpend, currency)}
-                        </span>
-                      </>
+                      <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">
+                        · {formatCurrency(totalSpend, currency)}
+                      </span>
                     )}
                   </div>
 
-                  <div
-                    className="flex items-center gap-1"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {moment.status !== 'completed' && (
-                      <button
-                        type="button"
-                        onClick={() => onUpdateMomentStatus(moment.id, 'completed')}
-                        className="px-2 py-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 font-medium"
-                        title="Mark Completed"
-                      >
-                        Complete
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onEditMoment(moment)}
-                      className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setConfirmDelete({
-                          kind: 'moment',
-                          id: moment.id,
-                          title: moment.title,
-                        })
-                      }
-                      className="px-2 py-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/50 text-rose-600 dark:text-rose-400"
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  <span className="font-medium text-[#286747] dark:text-[#70A987] group-hover:translate-x-0.5 transition-transform">
+                    Open →
+                  </span>
                 </div>
               </article>
             )
           )}
         </div>
       ) : (
-        <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-          <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
-            {filteredMoments.map(({ moment, nextDate, daysUntil, activitiesCount }) => (
-              <div
-                key={moment.id}
-                onClick={() => onSelectMoment(moment.id)}
-                className="py-4 first:pt-1 last:pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer group"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">
-                      {formatDate(nextDate, dateFormat)}
-                    </span>
-                    <span aria-hidden="true">·</span>
-                    <span>{moment.type}</span>
-                    <span aria-hidden="true">·</span>
-                    <span className="capitalize">{moment.status.replace('-', ' ')}</span>
-                  </div>
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                    {moment.title}
-                  </h3>
-                  {moment.description && (
-                    <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-1">
-                      {moment.description}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-4 text-xs font-mono text-slate-500 dark:text-slate-400 shrink-0">
-                  <span>{activitiesCount} tasks</span>
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    {getRelativeDayText(daysUntil)}
+        /* Timeline Mode */
+        <div className="dn-card p-4 sm:p-5 divide-y divide-slate-100 dark:divide-slate-800/70">
+          {filteredMoments.map(({ moment, nextDate, daysUntil, activitiesCount }) => (
+            <div
+              key={moment.id}
+              onClick={() => onSelectMoment(moment.id)}
+              className="py-3 first:pt-1 last:pb-1 flex items-center justify-between gap-3 cursor-pointer group"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                  <span className="font-mono text-[#286747] dark:text-[#70A987] font-semibold">
+                    {formatDate(nextDate, dateFormat)}
                   </span>
+                  <span>·</span>
+                  <span>{moment.type}</span>
                 </div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-[#286747] dark:group-hover:text-[#70A987] truncate">
+                  {moment.title}
+                </h3>
               </div>
-            ))}
-          </div>
-        </section>
+
+              <div className="text-right shrink-0">
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {getRelativeDayText(daysUntil)}
+                </p>
+                {activitiesCount > 0 && (
+                  <p className="text-[11px] text-slate-400 font-mono">{activitiesCount} tasks</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
+      {/* Deletion Dialog */}
       <ConfirmDialog
         open={!!confirmDelete}
         title="Delete Moment?"

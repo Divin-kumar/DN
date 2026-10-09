@@ -200,7 +200,8 @@ export type PrimarySection =
   | 'memories'
   | 'attachments'
   | 'finances'
-  | 'settings';
+  | 'settings'
+  | 'more';
 
 export type MemoriesSubTab = 'journal' | 'attachments' | 'greetings';
 export type FinancesSubTab = 'overview' | 'transactions' | 'insights';

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ArrowLeft,
   Calendar,
   CheckSquare,
   Compass,
@@ -22,6 +23,7 @@ import { FinancesAndInsightsView } from './components/FinancesAndInsightsView';
 import { HomeView } from './components/HomeView';
 import { MemoriesAndVaultView } from './components/MemoriesAndVaultView';
 import { MomentsView } from './components/MomentsView';
+import { MoreHubView } from './components/MoreHubView';
 import { QuickCreateModal, QuickCreateMode } from './components/QuickCreateModal';
 import { SettingsAndBackupView } from './components/SettingsAndBackupView';
 import {
@@ -660,6 +662,20 @@ export default function App() {
     setActiveSection('home');
   };
 
+  const handleExportJsonBackup = () => {
+    try {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(db, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', dataStr);
+      downloadAnchor.setAttribute('download', `dn_backup_${new Date().toISOString().slice(0, 10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (err) {
+      console.error('Failed to export JSON backup:', err);
+    }
+  };
+
   const isEventsActive = activeSection === 'events' || activeSection === 'moments';
 
   return (
@@ -804,22 +820,13 @@ export default function App() {
               )}
             </button>
 
-            {/* Settings button on mobile/tablet */}
-            <button
-              onClick={() => handleNavigate('settings')}
-              className="lg:hidden h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400"
-              title="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
-
-            {/* Global Quick Add Button */}
+            {/* Desktop Quick Add Button */}
             <button
               onClick={() => handleOpenQuickCreate('moment')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] dark:hover:bg-[#84BD9A] text-white dark:text-[#101612] text-xs font-semibold shadow-xs transition-transform active:scale-95"
+              className="hidden lg:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] dark:hover:bg-[#84BD9A] text-white dark:text-[#101612] text-xs font-semibold shadow-xs transition-transform active:scale-95"
             >
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add</span>
+              <span>Add</span>
             </button>
           </div>
         </div>
@@ -830,6 +837,18 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-5 pb-24 lg:pb-12">
+        {/* Back to More Hub breadcrumb for mobile secondary screens */}
+        {(activeSection === 'memories' || activeSection === 'attachments' || activeSection === 'settings') && (
+          <button
+            type="button"
+            onClick={() => handleNavigate('more')}
+            className="lg:hidden inline-flex items-center gap-1.5 text-xs font-semibold text-[#286747] dark:text-[#70A987] mb-3 hover:underline"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>More Hub</span>
+          </button>
+        )}
+
         {activeSection === 'home' && (
           <HomeView
             db={db}
@@ -918,6 +937,15 @@ export default function App() {
           />
         )}
 
+        {activeSection === 'more' && (
+          <MoreHubView
+            db={db}
+            onNavigate={handleNavigate}
+            onUpdateSettings={handleUpdateSettings}
+            onExportJson={handleExportJsonBackup}
+          />
+        )}
+
         {activeSection === 'settings' && (
           <SettingsAndBackupView
             db={db}
@@ -930,11 +958,11 @@ export default function App() {
         )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar (Refined Botanical Touch Bar) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#19211B]/95 backdrop-blur-lg border-t border-[#DFE4DC] dark:border-[#303B32] px-2 py-1.5 flex items-center justify-around safe-bottom">
+      {/* Mobile Bottom Navigation Bar (5 Primary Destinations, iPhone-Optimized) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#19211B]/95 backdrop-blur-lg border-t border-[#DFE4DC] dark:border-[#303B32] px-1 py-1.5 flex items-center justify-around safe-bottom">
         <button
           onClick={() => handleNavigate('home')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-colors ${
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1 px-1 rounded-xl transition-colors ${
             activeSection === 'home'
               ? 'text-[#286747] dark:text-[#70A987] font-semibold'
               : 'text-slate-500 dark:text-slate-400'
@@ -946,7 +974,7 @@ export default function App() {
 
         <button
           onClick={() => handleNavigate('events')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-colors ${
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1 px-1 rounded-xl transition-colors ${
             isEventsActive
               ? 'text-[#286747] dark:text-[#70A987] font-semibold'
               : 'text-slate-500 dark:text-slate-400'
@@ -958,7 +986,7 @@ export default function App() {
 
         <button
           onClick={() => handleNavigate('activities')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-colors ${
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1 px-1 rounded-xl transition-colors ${
             activeSection === 'activities'
               ? 'text-[#286747] dark:text-[#70A987] font-semibold'
               : 'text-slate-500 dark:text-slate-400'
@@ -968,30 +996,9 @@ export default function App() {
           <span className="text-[10px]">Activities</span>
         </button>
 
-        {/* Center Floating Quick Action Button */}
-        <button
-          onClick={() => handleOpenQuickCreate('moment')}
-          className="-mt-5 flex h-12 w-12 items-center justify-center rounded-full bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] shadow-md shadow-emerald-950/20 active:scale-95 transition-transform"
-          aria-label="Create new entry"
-        >
-          <Plus className="h-6 w-6" />
-        </button>
-
-        <button
-          onClick={() => handleNavigate('memories')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-colors ${
-            activeSection === 'memories'
-              ? 'text-[#286747] dark:text-[#70A987] font-semibold'
-              : 'text-slate-500 dark:text-slate-400'
-          }`}
-        >
-          <Heart className="h-5 w-5" />
-          <span className="text-[10px]">Memories</span>
-        </button>
-
         <button
           onClick={() => handleNavigate('finances')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-colors ${
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1 px-1 rounded-xl transition-colors ${
             activeSection === 'finances'
               ? 'text-[#286747] dark:text-[#70A987] font-semibold'
               : 'text-slate-500 dark:text-slate-400'
@@ -999,6 +1006,21 @@ export default function App() {
         >
           <Wallet className="h-5 w-5" />
           <span className="text-[10px]">Finances</span>
+        </button>
+
+        <button
+          onClick={() => handleNavigate('more')}
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1 px-1 rounded-xl transition-colors ${
+            activeSection === 'more' ||
+            activeSection === 'memories' ||
+            activeSection === 'attachments' ||
+            activeSection === 'settings'
+              ? 'text-[#286747] dark:text-[#70A987] font-semibold'
+              : 'text-slate-500 dark:text-slate-400'
+          }`}
+        >
+          <Compass className="h-5 w-5" />
+          <span className="text-[10px]">More</span>
         </button>
       </nav>
 
