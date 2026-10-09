@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import {
   Calendar,
+  CheckSquare,
   Compass,
   FileSpreadsheet,
   Heart,
   Home,
   Moon,
+  Paperclip,
   Plus,
   Settings,
   Sparkles,
   Sun,
   Wallet,
 } from 'lucide-react';
+import { ActivitiesView } from './components/ActivitiesView';
+import { AttachmentsView } from './components/AttachmentsView';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { ConnectivityAndUpdateBanner, PWAInstallButton } from './components/PWAInstallBanner';
 import { FinancesAndInsightsView } from './components/FinancesAndInsightsView';
@@ -52,9 +56,18 @@ export default function App() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed && parsed.moments && parsed.settings && parsed.profile) {
+          const initial = createInitialDatabase();
           return {
-            ...createInitialDatabase(),
+            ...initial,
             ...parsed,
+            settings: {
+              ...initial.settings,
+              ...parsed.settings,
+              homeSections: {
+                ...initial.settings.homeSections,
+                ...(parsed.settings.homeSections || {}),
+              },
+            },
           };
         }
       }
@@ -65,7 +78,9 @@ export default function App() {
   });
 
   // Navigation State
-  const [activeSection, setActiveSection] = useState<PrimarySection>('home');
+  const [activeSection, setActiveSection] = useState<PrimarySection>(
+    db.settings.defaultLanding || 'home'
+  );
   const [selectedMomentId, setSelectedMomentId] = useState<string | null>(null);
   const [memoriesSubTab, setMemoriesSubTab] = useState<MemoriesSubTab>('journal');
   const [financesSubTab, setFinancesSubTab] = useState<FinancesSubTab>('overview');
@@ -90,10 +105,12 @@ export default function App() {
     }
   }, [db]);
 
-  // Handle Theme switching & System sync
+  // Apply Visual Design Tokens & Theme
   useEffect(() => {
+    const root = document.documentElement;
+
+    // Theme mode
     const applyTheme = (theme: 'light' | 'dark' | 'system') => {
-      const root = document.documentElement;
       if (theme === 'dark') {
         root.classList.add('dark');
       } else if (theme === 'light') {
@@ -107,22 +124,39 @@ export default function App() {
         }
       }
     };
-
     applyTheme(db.settings.theme);
 
     if (db.settings.theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       const listener = (e: MediaQueryListEvent) => {
         if (e.matches) {
-          document.documentElement.classList.add('dark');
+          root.classList.add('dark');
         } else {
-          document.documentElement.classList.remove('dark');
+          root.classList.remove('dark');
         }
       };
       mediaQuery.addEventListener('change', listener);
       return () => mediaQuery.removeEventListener('change', listener);
     }
   }, [db.settings.theme]);
+
+  // Apply fine-grained appearance tokens
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-shade', db.settings.brandGreenShade || 'botanical');
+    root.setAttribute('data-density', db.settings.density || 'balanced');
+    root.setAttribute('data-card-style', db.settings.cardStyle || 'bordered');
+    root.setAttribute('data-radius', db.settings.cornerRadius || 'refined');
+    root.setAttribute('data-textscale', db.settings.textScale || 'default');
+    root.setAttribute('data-reduced-motion', String(Boolean(db.settings.reducedMotion)));
+  }, [
+    db.settings.brandGreenShade,
+    db.settings.density,
+    db.settings.cardStyle,
+    db.settings.cornerRadius,
+    db.settings.textScale,
+    db.settings.reducedMotion,
+  ]);
 
   // Unified Navigation Handler
   const handleNavigate = (
@@ -133,7 +167,9 @@ export default function App() {
       financesTab?: FinancesSubTab;
     }
   ) => {
-    setActiveSection(section);
+    // Normalize 'moments' to 'events'
+    const target = section === 'moments' ? 'events' : section;
+    setActiveSection(target);
     if (options?.momentId !== undefined) {
       setSelectedMomentId(options.momentId);
     }
@@ -188,7 +224,7 @@ export default function App() {
     setQuickCreateOpen(true);
   };
 
-  // MOMENT Operations
+  // MOMENT / EVENT Operations
   const handleSaveMoment = (
     momentData: Omit<MomentRecord, 'id' | 'createdAt' | 'updatedAt' | 'history'>,
     existingId?: string
@@ -296,6 +332,7 @@ export default function App() {
     }));
   };
 
+  // Safe Deletion: When an event is deleted, clear references on related items rather than deleting them
   const handleDeleteMoment = (momentId: string) => {
     setDb((prev) => ({
       ...prev,
@@ -354,7 +391,7 @@ export default function App() {
                     {
                       id: `evt-${Date.now()}`,
                       timestamp: now,
-                      title: `Added activity "${activityData.title}"`,
+                      title: `Linked activity "${activityData.title}"`,
                       category: 'activity',
                     },
                   ],
@@ -417,6 +454,15 @@ export default function App() {
     setDb((prev) => ({
       ...prev,
       activities: prev.activities.filter((a) => a.id !== activityId),
+      finances: prev.finances.map((f) =>
+        f.activityId === activityId ? { ...f, activityId: undefined } : f
+      ),
+      attachments: prev.attachments.map((at) =>
+        at.activityId === activityId ? { ...at, activityId: undefined } : at
+      ),
+      memories: prev.memories.map((m) =>
+        m.activityId === activityId ? { ...m, activityId: undefined } : m
+      ),
     }));
   };
 
@@ -443,28 +489,6 @@ export default function App() {
         ...prev,
         memories: [newMemory, ...prev.memories],
       }));
-
-      if (memoryData.momentId) {
-        setDb((prev) => ({
-          ...prev,
-          moments: prev.moments.map((m) =>
-            m.id === memoryData.momentId
-              ? {
-                  ...m,
-                  history: [
-                    ...m.history,
-                    {
-                      id: `evt-${Date.now()}`,
-                      timestamp: now,
-                      title: `Logged memory reflection: ${memoryData.title}`,
-                      category: 'memory',
-                    },
-                  ],
-                }
-              : m
-          ),
-        }));
-      }
     }
   };
 
@@ -534,28 +558,6 @@ export default function App() {
         ...prev,
         finances: [newFinance, ...prev.finances],
       }));
-
-      if (financeData.momentId) {
-        setDb((prev) => ({
-          ...prev,
-          moments: prev.moments.map((m) =>
-            m.id === financeData.momentId
-              ? {
-                  ...m,
-                  history: [
-                    ...m.history,
-                    {
-                      id: `evt-${Date.now()}`,
-                      timestamp: now,
-                      title: `Logged expense entry: ${financeData.title}`,
-                      category: 'expense',
-                    },
-                  ],
-                }
-              : m
-          ),
-        }));
-      }
     }
   };
 
@@ -658,38 +660,40 @@ export default function App() {
     setActiveSection('home');
   };
 
+  const isEventsActive = activeSection === 'events' || activeSection === 'moments';
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased selection:bg-indigo-500 selection:text-white flex flex-col font-sans">
+    <div className="min-h-screen text-slate-900 dark:text-slate-100 antialiased selection:bg-[#286747]/20 flex flex-col font-sans transition-colors duration-200">
       {/* Top Bar (Zone 1: Brand Wordmark, Zone 2: Navigation, Zone 3: Actions) */}
-      <header className="sticky top-0 z-40 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800">
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#19211B]/90 backdrop-blur-md border-b border-[#DFE4DC] dark:border-[#303B32]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          {/* Zone 1: Brand Wordmark */}
+          {/* Zone 1: Brand Monogram & Wordmark */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => handleNavigate('home')}
               className="flex items-center gap-2.5 text-left group focus:outline-none"
             >
-              <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white font-bold text-base shadow-xs group-hover:scale-105 transition-transform">
+              <div className="h-9 w-9 rounded-xl bg-[#286747] dark:bg-[#70A987] flex items-center justify-center text-white dark:text-[#101612] font-bold text-base shadow-xs group-hover:scale-105 transition-transform">
                 DN
               </div>
               <div>
-                <span className="font-bold text-base sm:text-lg tracking-tight text-slate-900 dark:text-white block leading-tight">
+                <span className="font-bold text-base sm:text-lg tracking-tight text-slate-900 dark:text-white block leading-tight font-editorial">
                   DN
                 </span>
                 <span className="text-[10px] tracking-wider uppercase font-semibold text-slate-400 dark:text-slate-500 block leading-none">
-                  Life Organizer
+                  Life Space
                 </span>
               </div>
             </button>
           </div>
 
           {/* Zone 2: Desktop Navigation Switcher */}
-          <nav className="hidden md:flex items-center gap-1 bg-slate-100/70 dark:bg-slate-800/60 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+          <nav className="hidden lg:flex items-center gap-1 bg-slate-100/70 dark:bg-[#202A22]/70 p-1 rounded-xl border border-slate-200/60 dark:border-slate-800/60">
             <button
               onClick={() => handleNavigate('home')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeSection === 'home'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                  ? 'bg-white dark:bg-[#19211B] text-[#286747] dark:text-[#70A987] shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -698,18 +702,35 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => handleNavigate('moments')}
+              onClick={() => handleNavigate('events')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeSection === 'moments'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                isEventsActive
+                  ? 'bg-white dark:bg-[#19211B] text-[#286747] dark:text-[#70A987] shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Calendar className="h-3.5 w-3.5" />
-              <span>Moments</span>
+              <span>Events</span>
               {db.moments.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-300">
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-50 dark:bg-emerald-950/80 text-[#286747] dark:text-[#70A987]">
                   {db.moments.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => handleNavigate('activities')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeSection === 'activities'
+                  ? 'bg-white dark:bg-[#19211B] text-[#286747] dark:text-[#70A987] shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <CheckSquare className="h-3.5 w-3.5" />
+              <span>Activities</span>
+              {db.activities.filter((a) => !a.completed).length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-50 dark:bg-emerald-950/80 text-[#286747] dark:text-[#70A987]">
+                  {db.activities.filter((a) => !a.completed).length}
                 </span>
               )}
             </button>
@@ -718,24 +739,31 @@ export default function App() {
               onClick={() => handleNavigate('memories')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeSection === 'memories'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                  ? 'bg-white dark:bg-[#19211B] text-[#286747] dark:text-[#70A987] shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Heart className="h-3.5 w-3.5" />
               <span>Memories</span>
-              {db.memories.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-violet-50 dark:bg-violet-950/80 text-violet-600 dark:text-violet-300">
-                  {db.memories.length}
-                </span>
-              )}
+            </button>
+
+            <button
+              onClick={() => handleNavigate('attachments')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeSection === 'attachments'
+                  ? 'bg-white dark:bg-[#19211B] text-[#286747] dark:text-[#70A987] shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              <span>Attachments</span>
             </button>
 
             <button
               onClick={() => handleNavigate('finances')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeSection === 'finances'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                  ? 'bg-white dark:bg-[#19211B] text-[#286747] dark:text-[#70A987] shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -747,7 +775,7 @@ export default function App() {
               onClick={() => handleNavigate('settings')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeSection === 'settings'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                  ? 'bg-white dark:bg-[#19211B] text-[#286747] dark:text-[#70A987] shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -760,7 +788,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <PWAInstallButton compact />
 
-            {/* Theme Toggle Button */}
+            {/* Quick Theme Toggle */}
             <button
               onClick={() => {
                 const nextTheme = db.settings.theme === 'dark' ? 'light' : 'dark';
@@ -772,17 +800,26 @@ export default function App() {
               {db.settings.theme === 'dark' ? (
                 <Sun className="h-4 w-4 text-amber-400" />
               ) : (
-                <Moon className="h-4 w-4 text-indigo-600" />
+                <Moon className="h-4 w-4 text-[#286747]" />
               )}
+            </button>
+
+            {/* Settings button on mobile/tablet */}
+            <button
+              onClick={() => handleNavigate('settings')}
+              className="lg:hidden h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400"
+              title="Settings"
+            >
+              <Settings className="h-4 w-4" />
             </button>
 
             {/* Global Quick Add Button */}
             <button
               onClick={() => handleOpenQuickCreate('moment')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xs transition-transform active:scale-95"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] dark:hover:bg-[#84BD9A] text-white dark:text-[#101612] text-xs font-semibold shadow-xs transition-transform active:scale-95"
             >
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Entry</span>
+              <span className="hidden sm:inline">Add</span>
             </button>
           </div>
         </div>
@@ -792,7 +829,7 @@ export default function App() {
       <ConnectivityAndUpdateBanner />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-5 pb-24 md:pb-12">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-5 pb-24 lg:pb-12">
         {activeSection === 'home' && (
           <HomeView
             db={db}
@@ -803,7 +840,7 @@ export default function App() {
           />
         )}
 
-        {activeSection === 'moments' && (
+        {isEventsActive && (
           <MomentsView
             db={db}
             selectedMomentId={selectedMomentId}
@@ -830,6 +867,17 @@ export default function App() {
           />
         )}
 
+        {activeSection === 'activities' && (
+          <ActivitiesView
+            db={db}
+            onOpenQuickCreate={handleOpenQuickCreate}
+            onEditActivity={handleEditActivity}
+            onToggleActivity={handleToggleActivity}
+            onDeleteActivity={handleDeleteActivity}
+            onNavigateToEvent={(mId) => handleNavigate('events', { momentId: mId })}
+          />
+        )}
+
         {activeSection === 'memories' && (
           <MemoriesAndVaultView
             db={db}
@@ -844,7 +892,17 @@ export default function App() {
             onDeleteAttachment={handleDeleteAttachment}
             onSaveGreeting={handleSaveGreeting}
             onDeleteGreeting={handleDeleteGreeting}
-            onNavigateToMoment={(mId) => handleNavigate('moments', { momentId: mId })}
+            onNavigateToMoment={(mId) => handleNavigate('events', { momentId: mId })}
+          />
+        )}
+
+        {activeSection === 'attachments' && (
+          <AttachmentsView
+            db={db}
+            onOpenQuickCreate={handleOpenQuickCreate}
+            onEditAttachment={handleEditAttachment}
+            onDeleteAttachment={handleDeleteAttachment}
+            onNavigateToEvent={(mId) => handleNavigate('events', { momentId: mId })}
           />
         )}
 
@@ -872,13 +930,13 @@ export default function App() {
         )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar (iOS / Touch-Friendly Floating Dock) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-t border-slate-200/80 dark:border-slate-800 px-3 py-1.5 flex items-center justify-around safe-bottom">
+      {/* Mobile Bottom Navigation Bar (Refined Botanical Touch Bar) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#19211B]/95 backdrop-blur-lg border-t border-[#DFE4DC] dark:border-[#303B32] px-2 py-1.5 flex items-center justify-around safe-bottom">
         <button
           onClick={() => handleNavigate('home')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-colors ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-colors ${
             activeSection === 'home'
-              ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+              ? 'text-[#286747] dark:text-[#70A987] font-semibold'
               : 'text-slate-500 dark:text-slate-400'
           }`}
         >
@@ -887,21 +945,33 @@ export default function App() {
         </button>
 
         <button
-          onClick={() => handleNavigate('moments')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-colors ${
-            activeSection === 'moments'
-              ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+          onClick={() => handleNavigate('events')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-colors ${
+            isEventsActive
+              ? 'text-[#286747] dark:text-[#70A987] font-semibold'
               : 'text-slate-500 dark:text-slate-400'
           }`}
         >
           <Calendar className="h-5 w-5" />
-          <span className="text-[10px]">Moments</span>
+          <span className="text-[10px]">Events</span>
         </button>
 
-        {/* Floating Quick Action Button */}
+        <button
+          onClick={() => handleNavigate('activities')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-colors ${
+            activeSection === 'activities'
+              ? 'text-[#286747] dark:text-[#70A987] font-semibold'
+              : 'text-slate-500 dark:text-slate-400'
+          }`}
+        >
+          <CheckSquare className="h-5 w-5" />
+          <span className="text-[10px]">Activities</span>
+        </button>
+
+        {/* Center Floating Quick Action Button */}
         <button
           onClick={() => handleOpenQuickCreate('moment')}
-          className="-mt-5 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 active:scale-95 transition-transform"
+          className="-mt-5 flex h-12 w-12 items-center justify-center rounded-full bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] shadow-md shadow-emerald-950/20 active:scale-95 transition-transform"
           aria-label="Create new entry"
         >
           <Plus className="h-6 w-6" />
@@ -909,9 +979,9 @@ export default function App() {
 
         <button
           onClick={() => handleNavigate('memories')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-colors ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-colors ${
             activeSection === 'memories'
-              ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+              ? 'text-[#286747] dark:text-[#70A987] font-semibold'
               : 'text-slate-500 dark:text-slate-400'
           }`}
         >
@@ -921,26 +991,14 @@ export default function App() {
 
         <button
           onClick={() => handleNavigate('finances')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-colors ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-colors ${
             activeSection === 'finances'
-              ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+              ? 'text-[#286747] dark:text-[#70A987] font-semibold'
               : 'text-slate-500 dark:text-slate-400'
           }`}
         >
           <Wallet className="h-5 w-5" />
           <span className="text-[10px]">Finances</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigate('settings')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-colors ${
-            activeSection === 'settings'
-              ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
-              : 'text-slate-500 dark:text-slate-400'
-          }`}
-        >
-          <Settings className="h-5 w-5" />
-          <span className="text-[10px]">Settings</span>
         </button>
       </nav>
 

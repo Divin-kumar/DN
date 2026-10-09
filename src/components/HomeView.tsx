@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Circle,
   Clock,
+  EyeOff,
   FileText,
   Gift,
   Heart,
@@ -58,10 +59,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const todayISO = getTodayISO();
   const { currency, dateFormat } = db.settings;
 
-  const hour = new Date().getHours();
-  const salutation =
-    hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const homeSections = db.settings.homeSections || {
+    focus: true,
+    events: true,
+    activities: true,
+    memories: true,
+    onThisDay: true,
+    finances: true,
+  };
+  const hideFinances = Boolean(db.settings.hideFinancesOnHome);
+  const prominence = db.settings.homeProminence || 'balanced';
+
   const userName = db.profile.nickname || db.profile.displayName || 'Friend';
+  const nowHour = new Date().getHours();
+  const salutation =
+    nowHour < 12 ? 'Good morning' : nowHour < 17 ? 'Good afternoon' : 'Good evening';
 
   const isEmptyWorkspace =
     db.moments.length === 0 &&
@@ -70,24 +82,28 @@ export const HomeView: React.FC<HomeViewProps> = ({
     db.finances.length === 0 &&
     db.attachments.length === 0;
 
-  const activeMomentsWithNext = db.moments
-    .filter((m) => m.status !== 'cancelled')
-    .map((m) => {
-      const nextDate = getNextOccurrenceDate(m, todayISO);
+  // Today's moments & activities
+  const todaysMoments = db.moments
+    .map((mom) => ({
+      moment: mom,
+      nextDate: getNextOccurrenceDate(mom, todayISO),
+    }))
+    .filter((x) => x.nextDate === todayISO);
+
+  const todaysActivities = db.activities.filter((act) => act.date === todayISO);
+
+  // Upcoming moments next 90 days
+  const upcomingMoments = db.moments
+    .map((mom) => {
+      const nextDate = getNextOccurrenceDate(mom, todayISO);
       const daysUntil = getDaysUntil(nextDate, todayISO);
-      return { moment: m, nextDate, daysUntil };
+      return { moment: mom, nextDate, daysUntil };
     })
-    .sort((a, b) => a.daysUntil - b.daysUntil);
+    .filter((x) => x.daysUntil > 0 && x.daysUntil <= 90)
+    .sort((a, b) => a.daysUntil - b.daysUntil)
+    .slice(0, 6);
 
-  const todaysMoments = activeMomentsWithNext.filter((item) => item.daysUntil === 0);
-  const upcomingMoments = activeMomentsWithNext
-    .filter((item) => item.daysUntil > 0 && item.daysUntil <= 90)
-    .slice(0, 5);
-
-  const todaysActivities = db.activities
-    .filter((a) => a.date === todayISO || (!a.completed && getDaysUntil(a.date, todayISO) <= 0))
-    .sort((a, b) => Number(a.completed) - Number(b.completed));
-
+  // On this day in past years
   const onThisDayMemories = db.memories
     .map((mem) => ({
       memory: mem,
@@ -102,6 +118,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }))
     .filter((x) => x.pastInfo.matches);
 
+  // Financial figures
   const currentYearMonth = todayISO.slice(0, 7);
   const periodFinances = db.finances.filter((f) =>
     financePeriod === 'month' ? f.date.startsWith(currentYearMonth) : true
@@ -127,129 +144,123 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const recentMemories = [...db.memories]
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 2);
-
-  const recentAttachments = [...db.attachments]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 3);
 
   return (
-    <div className="space-y-8 pb-10">
-      <section className="flex flex-col md:flex-row md:items-end justify-between gap-4 pt-2">
-        <div>
-          <p className="text-xs font-mono text-slate-500 dark:text-slate-400">
-            {formatDate(todayISO, dateFormat)} · Private Personal Workspace
-          </p>
-          <h1 className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-white text-balance">
-            {salutation}, {userName}
-          </h1>
-          <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300 max-w-2xl">
-            {isEmptyWorkspace
-              ? 'Your personal space is clean and ready. Begin by adding an important occasion, daily task, memory, or expense below.'
-              : `You have ${todaysMoments.length} ${
-                  todaysMoments.length === 1 ? 'occasion' : 'occasions'
-                } and ${todaysActivities.filter((a) => !a.completed).length} open ${
-                  todaysActivities.filter((a) => !a.completed).length === 1 ? 'activity' : 'activities'
-                } on your radar for today.`}
-          </p>
-        </div>
+    <div className="space-y-6 pb-10">
+      {/* 1. Header Greeting & Focus */}
+      {homeSections.focus !== false && (
+        <section className="flex flex-col md:flex-row md:items-end justify-between gap-4 pt-1">
+          <div>
+            <p className="text-xs font-mono text-slate-500 dark:text-slate-400">
+              {formatDate(todayISO, dateFormat)} · Private Life Space
+            </p>
+            <h1 className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-white font-editorial">
+              {salutation}, {userName}
+            </h1>
+            <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-2xl">
+              {isEmptyWorkspace
+                ? 'Your personal space is quiet and ready. Begin by adding an occasion, task, memory, or expense.'
+                : `You have ${todaysMoments.length} ${
+                    todaysMoments.length === 1 ? 'occasion' : 'occasions'
+                  } and ${todaysActivities.filter((a) => !a.completed).length} open ${
+                    todaysActivities.filter((a) => !a.completed).length === 1 ? 'activity' : 'activities'
+                  } scheduled for today.`}
+            </p>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => onNavigate('finances', { financesTab: 'insights' })}
-            className="min-h-[44px] px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-          >
-            <BarChart3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span>Life & Finance Insights</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onNavigate('activities')}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 transition-colors shrink-0"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#286747] dark:text-[#70A987]" />
+              <span>Activities ({db.activities.filter((a) => !a.completed).length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => onNavigate('memories', { memoriesTab: 'greetings' })}
-            className="min-h-[44px] px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-          >
-            <Gift className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-            <span>Greetings Studio</span>
-          </button>
-        </div>
-      </section>
+            <button
+              type="button"
+              onClick={() => onNavigate('memories', { memoriesTab: 'greetings' })}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 transition-colors shrink-0"
+            >
+              <Gift className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>Greetings Studio</span>
+            </button>
+          </div>
+        </section>
+      )}
 
-      <section aria-label="Quick Actions" className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-        <div className="flex items-center gap-2.5 min-w-max">
-          <button
-            type="button"
-            onClick={() => onOpenQuickCreate('moment')}
-            className="min-h-[44px] px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium inline-flex items-center gap-2 shadow-xs transition-colors whitespace-nowrap shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Moment</span>
-          </button>
+      {/* Quick Actions Row */}
+      {homeSections.focus !== false && (
+        <section aria-label="Quick Actions" className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <div className="flex items-center gap-2 min-w-max">
+            <button
+              type="button"
+              onClick={() => onOpenQuickCreate('moment')}
+              className="px-3.5 py-2 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] dark:hover:bg-[#84BD9A] text-white dark:text-[#101612] text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Event</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => onOpenQuickCreate('activity')}
-            className="min-h-[44px] px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-          >
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span>Add Activity</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => onOpenQuickCreate('activity')}
+              className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-1.5 transition-colors shrink-0"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>New Activity</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => onOpenQuickCreate('memory')}
-            className="min-h-[44px] px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-          >
-            <Heart className="w-4 h-4 text-rose-500" />
-            <span>Write Memory</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => onOpenQuickCreate('memory')}
+              className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-1.5 transition-colors shrink-0"
+            >
+              <Heart className="w-3.5 h-3.5 text-rose-500" />
+              <span>Record Memory</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => onOpenQuickCreate('expense')}
-            className="min-h-[44px] px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-          >
-            <Wallet className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            <span>Log Expense</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => onOpenQuickCreate('expense')}
+              className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-1.5 transition-colors shrink-0"
+            >
+              <Wallet className="w-3.5 h-3.5 text-amber-600" />
+              <span>Log Expense</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => onOpenQuickCreate('income')}
-            className="min-h-[44px] px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-          >
-            <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span>Record Income</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => onOpenQuickCreate('attachment')}
+              className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-1.5 transition-colors shrink-0"
+            >
+              <FileText className="w-3.5 h-3.5 text-[#286747] dark:text-[#70A987]" />
+              <span>Add File</span>
+            </button>
+          </div>
+        </section>
+      )}
 
-          <button
-            type="button"
-            onClick={() => onOpenQuickCreate('attachment')}
-            className="min-h-[44px] px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-          >
-            <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span>Add Attachment</span>
-          </button>
-        </div>
-      </section>
-
+      {/* Empty State Banner */}
       {isEmptyWorkspace && (
-        <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6 sm:p-8">
+        <section className="dn-card p-6 sm:p-7">
           <div className="max-w-2xl space-y-3">
-            <p className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
-              Private By Design · Local-First Companion
+            <p className="text-xs font-semibold text-[#286747] dark:text-[#70A987]">
+              Quiet By Design · Personal Companion
             </p>
-            <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 dark:text-white text-balance">
-              Start fresh or explore DN with realistic sample records
+            <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 dark:text-white">
+              Start fresh or explore with sample life records
             </h2>
-            <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-              Your workspace starts completely clean so your personal moments, journal entries, and ₹ cash flow remain exclusively yours. Want to see how interconnected moments, recurring birthdays, Coorg travel memories, occasion greetings, and finances work together first?
+            <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              Your workspace starts private and clean. You can add your own important dates, personal reflections, tasks, and cash flow—or load realistic sample records to explore the modules.
             </p>
-            <div className="pt-3 flex flex-wrap items-center gap-3">
+            <div className="pt-2 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={onLoadDemoData}
-                className="min-h-[44px] px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs sm:text-sm font-medium text-white inline-flex items-center gap-2 shadow-xs transition-colors whitespace-nowrap shrink-0"
+                className="px-4 py-2.5 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] text-xs font-semibold text-white dark:text-[#101612] inline-flex items-center gap-2 shadow-xs transition-colors"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Load Sample Life Workspace</span>
@@ -257,90 +268,78 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenQuickCreate('moment')}
-                className="min-h-[44px] px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
-                Create First Moment
+                Create First Event
               </button>
             </div>
           </div>
         </section>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <div className="lg:col-span-7 space-y-6">
-          <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Today’s Focus & Activities
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Occasions happening today and tasks scheduled for your attention
-                </p>
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Left / Primary Column */}
+        <div className="lg:col-span-7 space-y-5">
+          {/* Today's Events & Activities */}
+          {homeSections.activities !== false && (
+            <section className="dn-card p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-4 mb-3">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                    Today’s Focus & Activities
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Occasions happening today and tasks scheduled for your attention
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenQuickCreate('activity')}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold text-[#286747] dark:text-[#70A987] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors shrink-0"
+                >
+                  + Add Task
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => onOpenQuickCreate('activity')}
-                className="min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors whitespace-nowrap shrink-0"
-              >
-                + Add Task
-              </button>
-            </div>
 
-            {todaysMoments.length === 0 && todaysActivities.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  A calm, unscheduled day ahead
-                </p>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                  No occasions or pending activities are due today. Add a task or plan an upcoming family moment whenever you are ready.
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                {todaysMoments.map(({ moment }) => (
-                  <div
-                    key={moment.id}
-                    onClick={() => onNavigate('moments', { momentId: moment.id })}
-                    className="py-3.5 first:pt-1 last:pb-1 flex items-center justify-between gap-4 cursor-pointer group"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-                        <span>Today’s Moment</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{moment.type}</span>
-                        {moment.time && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span className="font-mono">{moment.time}</span>
-                          </>
-                        )}
-                      </div>
-                      <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
-                        {moment.title}
-                      </p>
-                      {moment.description && (
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
-                          {moment.description}
-                        </p>
-                      )}
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 shrink-0 transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                ))}
-
-                {todaysActivities.map((act) => {
-                  const linkedMoment = db.moments.find((m) => m.id === act.momentId);
-                  return (
+              {todaysMoments.length === 0 && todaysActivities.length === 0 ? (
+                <div className="py-6 text-center">
+                  <p className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-400">
+                    A calm, unscheduled day ahead
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400 max-w-sm mx-auto">
+                    No occasions or pending activities are due today. Add a task or plan an upcoming moment whenever you are ready.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                  {todaysMoments.map(({ moment }) => (
                     <div
-                      key={act.id}
-                      className="py-3.5 first:pt-1 last:pb-1 flex items-start justify-between gap-3"
+                      key={moment.id}
+                      onClick={() => onNavigate('events', { momentId: moment.id })}
+                      className="py-3 flex items-center justify-between gap-4 cursor-pointer group"
                     >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 text-xs text-[#286747] dark:text-[#70A987] font-medium">
+                          <span>Today’s Occasion</span>
+                          <span>·</span>
+                          <span>{moment.type}</span>
+                          {moment.time && <span className="font-mono">· {moment.time}</span>}
+                        </div>
+                        <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white group-hover:text-[#286747] dark:group-hover:text-[#70A987] transition-colors truncate">
+                          {moment.title}
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#286747] shrink-0" />
+                    </div>
+                  ))}
+
+                  {todaysActivities.map((act) => (
+                    <div key={act.id} className="py-3 flex items-start justify-between gap-3">
                       <button
                         type="button"
                         onClick={() => onToggleActivity(act.id)}
-                        className="min-h-[44px] min-w-[44px] -ml-2 -my-1.5 flex items-center justify-center text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 shrink-0"
-                        aria-label={act.completed ? 'Mark activity incomplete' : 'Mark activity completed'}
+                        className="mt-0.5 text-slate-400 hover:text-[#286747] dark:hover:text-[#70A987] shrink-0"
                       >
                         {act.completed ? (
                           <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -351,7 +350,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                       <div className="flex-1 min-w-0">
                         <p
-                          className={`text-sm font-medium ${
+                          className={`text-xs sm:text-sm font-medium ${
                             act.completed
                               ? 'line-through text-slate-400 dark:text-slate-500'
                               : 'text-slate-900 dark:text-white'
@@ -359,446 +358,286 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         >
                           {act.title}
                         </p>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
                           <span
                             className={
                               act.priority === 'high'
-                                ? 'text-rose-600 dark:text-rose-400 font-medium'
+                                ? 'text-rose-600 dark:text-rose-400 font-semibold'
                                 : act.priority === 'medium'
                                 ? 'text-amber-600 dark:text-amber-400'
                                 : ''
                             }
                           >
-                            {act.priority.charAt(0).toUpperCase() + act.priority.slice(1)} priority
+                            {act.priority.toUpperCase()}
                           </span>
-                          <span aria-hidden="true">·</span>
-                          <span className="font-mono">{formatDate(act.date, dateFormat)}</span>
-                          {linkedMoment && (
-                            <>
-                              <span aria-hidden="true">·</span>
-                              <button
-                                type="button"
-                                onClick={() => onNavigate('moments', { momentId: linkedMoment.id })}
-                                className="text-indigo-600 dark:text-indigo-400 hover:underline truncate max-w-[180px]"
-                              >
-                                {linkedMoment.title}
-                              </button>
-                            </>
-                          )}
+                          <span>·</span>
+                          <span>{formatDate(act.date, dateFormat)}</span>
                         </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
-          <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Upcoming Moments & Occasions
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Birthdays, anniversaries, festivals, and recurring dates over the next 90 days
-                </p>
+          {/* Upcoming Events */}
+          {homeSections.events !== false && (
+            <section className="dn-card p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-4 mb-3">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                    Upcoming Occasions & Countdowns
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Next 90 days of birthdays, anniversaries, and holidays
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('events')}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold text-[#286747] dark:text-[#70A987] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 inline-flex items-center gap-1 transition-colors shrink-0"
+                >
+                  <span>View All</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('moments')}
-                className="min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0"
-              >
-                <span>View All</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
 
-            {upcomingMoments.length === 0 ? (
-              <div className="py-8 text-center">
-                <Calendar className="w-7 h-7 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  No upcoming occasions registered yet
-                </p>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                  Add family birthdays, wedding anniversaries, or festivals so DN can track their next occurrence automatically.
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                {upcomingMoments.map(({ moment, nextDate, daysUntil }) => {
-                  const openTasks = db.activities.filter(
-                    (a) => a.momentId === moment.id && !a.completed
-                  ).length;
-
-                  return (
+              {upcomingMoments.length === 0 ? (
+                <div className="py-6 text-center">
+                  <Calendar className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                  <p className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-400">
+                    No upcoming occasions in the next 90 days
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                  {upcomingMoments.map(({ moment, nextDate, daysUntil }) => (
                     <div
                       key={moment.id}
-                      onClick={() => onNavigate('moments', { momentId: moment.id })}
-                      className="py-3.5 first:pt-1 last:pb-1 flex items-center justify-between gap-4 cursor-pointer group"
+                      onClick={() => onNavigate('events', { momentId: moment.id })}
+                      className="py-3 flex items-center justify-between gap-4 cursor-pointer group"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                        <p className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white group-hover:text-[#286747] dark:group-hover:text-[#70A987] transition-colors truncate">
                           {moment.title}
                         </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
                           <span>{moment.type}</span>
-                          <span aria-hidden="true">·</span>
+                          <span>·</span>
                           <span className="font-mono">{formatDate(nextDate, dateFormat)}</span>
                           {moment.recurrence !== 'none' && (
-                            <>
-                              <span aria-hidden="true">·</span>
-                              <span className="capitalize">Repeats {moment.recurrence}</span>
-                            </>
-                          )}
-                          {openTasks > 0 && (
-                            <>
-                              <span aria-hidden="true">·</span>
-                              <span className="text-indigo-600 dark:text-indigo-400">
-                                {openTasks} {openTasks === 1 ? 'task' : 'tasks'} open
-                              </span>
-                            </>
+                            <span>· Repeats {moment.recurrence}</span>
                           )}
                         </div>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <span className="text-xs font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                        <span className="text-xs font-mono font-semibold text-[#286747] dark:text-[#70A987]">
                           {getRelativeDayText(daysUntil)}
                         </span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
-          <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  On This Day
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Revisiting past moments and personal memories from previous years
-                </p>
+          {/* On This Day */}
+          {homeSections.onThisDay !== false && (
+            <section className="dn-card p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-4 mb-3">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                    On This Day
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Revisiting past moments and personal memories from previous years
+                  </p>
+                </div>
+                <Clock className="w-4 h-4 text-slate-400 shrink-0" />
               </div>
-              <Clock className="w-4 h-4 text-slate-400 shrink-0" />
-            </div>
 
-            {onThisDayMemories.length === 0 && onThisDayMoments.length === 0 ? (
-              <div className="py-6 text-center">
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-md mx-auto">
-                  No past entries share today’s exact calendar date yet. As you record memories and moments over the years, they will resurface here on their anniversary.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {onThisDayMemories.map(({ memory, pastInfo }) => (
-                  <div
-                    key={memory.id}
-                    onClick={() => onNavigate('memories', { memoriesTab: 'journal' })}
-                    className="group cursor-pointer rounded-xl bg-slate-50/70 dark:bg-slate-800/40 p-4 transition-colors hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+              {onThisDayMemories.length === 0 && onThisDayMoments.length === 0 ? (
+                <div className="py-5 text-center">
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    No past entries share today’s exact calendar date. As you record memories and moments over time, they will resurface here on their anniversary.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {onThisDayMemories.map(({ memory, pastInfo }) => (
+                    <div
+                      key={memory.id}
+                      onClick={() => onNavigate('memories', { memoriesTab: 'journal' })}
+                      className="group cursor-pointer rounded-xl bg-slate-50/70 dark:bg-slate-800/40 p-3.5 transition-colors hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+                    >
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        {memory.photoUrl && (
+                          <img
+                            src={memory.photoUrl}
+                            alt={memory.title}
+                            className="w-full sm:w-24 h-24 object-cover rounded-lg shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs text-[#286747] dark:text-[#70A987] font-medium">
+                            {pastInfo.yearsAgo} {pastInfo.yearsAgo === 1 ? 'Year' : 'Years'} Ago Today
+                          </div>
+                          <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white group-hover:text-[#286747]">
+                            {memory.title}
+                          </h3>
+                          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+                            {memory.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+
+        {/* Right Column: Financial Snapshot & Recent Memories */}
+        <div className="lg:col-span-5 space-y-5">
+          {/* Financial Snapshot */}
+          {homeSections.finances !== false && !hideFinances && (
+            <section className="dn-card p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                    Financial Snapshot
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Recorded personal cash flow ({currency})
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setFinancePeriod('month')}
+                    className={`px-2 py-0.5 rounded-md font-medium ${
+                      financePeriod === 'month'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500'
+                    }`}
                   >
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      {memory.photoUrl && (
+                    Month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFinancePeriod('all')}
+                    className={`px-2 py-0.5 rounded-md font-medium ${
+                      financePeriod === 'all'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500'
+                    }`}
+                  >
+                    All
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div className="p-3 rounded-xl bg-slate-50/70 dark:bg-slate-850/50 border border-slate-100 dark:border-slate-800">
+                  <p className="text-[11px] text-slate-500">Recorded Income</p>
+                  <p className="text-base font-bold text-emerald-700 dark:text-emerald-400 mt-0.5 tabular-nums">
+                    {formatCurrency(totalIncome, currency)}
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-50/70 dark:bg-slate-850/50 border border-slate-100 dark:border-slate-800">
+                  <p className="text-[11px] text-slate-500">Recorded Spending</p>
+                  <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5 tabular-nums">
+                    {formatCurrency(totalExpenses, currency)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-850/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] text-slate-500">Net Recorded Balance</p>
+                  <p
+                    className={`text-base font-bold tabular-nums ${
+                      netCashFlow >= 0
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : 'text-rose-600 dark:text-rose-400'
+                    }`}
+                  >
+                    {formatCurrency(netCashFlow, currency)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => onNavigate('finances')}
+                  className="text-xs font-semibold text-[#286747] dark:text-[#70A987] hover:underline"
+                >
+                  Open Finances →
+                </button>
+              </div>
+            </section>
+          )}
+
+          {/* Recent Memories Gallery */}
+          {homeSections.memories !== false && (
+            <section className="dn-card p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                    Recent Memories
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Reflections and captured moments
+                  </p>
+                </div>
+                <button
+                  onClick={() => onNavigate('memories')}
+                  className="text-xs font-semibold text-[#286747] dark:text-[#70A987] hover:underline"
+                >
+                  View All →
+                </button>
+              </div>
+
+              {recentMemories.length === 0 ? (
+                <div className="py-6 text-center">
+                  <p className="text-xs text-slate-400">No memories recorded yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentMemories.map((mem) => (
+                    <div
+                      key={mem.id}
+                      onClick={() => onNavigate('memories')}
+                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
+                    >
+                      {mem.photoUrl ? (
                         <img
-                          src={memory.photoUrl}
-                          alt={memory.title}
-                          referrerPolicy="no-referrer"
-                          className="w-full sm:w-28 h-28 object-cover rounded-lg shrink-0"
+                          src={mem.photoUrl}
+                          alt={mem.title}
+                          className="h-12 w-12 rounded-lg object-cover shrink-0"
                         />
+                      ) : (
+                        <div className="h-12 w-12 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] flex items-center justify-center shrink-0">
+                          <Heart className="h-5 w-5" />
+                        </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-                          <span>
-                            {pastInfo.yearsAgo} {pastInfo.yearsAgo === 1 ? 'Year' : 'Years'} Ago Today
-                          </span>
-                          {memory.location && (
-                            <>
-                              <span aria-hidden="true">·</span>
-                              <span className="truncate">{memory.location}</span>
-                            </>
-                          )}
-                        </div>
-                        <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                          {memory.title}
-                        </h3>
-                        <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300 line-clamp-2">
-                          {memory.description}
+                        <p className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white truncate">
+                          {mem.title}
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          {formatDate(mem.date, dateFormat)} {mem.location ? `· ${mem.location}` : ''}
                         </p>
                       </div>
                     </div>
-                  </div>
-                ))}
-
-                {onThisDayMoments.map(({ moment, pastInfo }) => (
-                  <div
-                    key={moment.id}
-                    onClick={() => onNavigate('moments', { momentId: moment.id })}
-                    className="flex items-center justify-between gap-4 py-2 cursor-pointer group"
-                  >
-                    <div>
-                      <p className="text-xs text-violet-600 dark:text-violet-400 font-medium">
-                        {pastInfo.yearsAgo} {pastInfo.yearsAgo === 1 ? 'Year' : 'Years'} Ago · {moment.type}
-                      </p>
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                        {moment.title}
-                      </p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-slate-400 shrink-0" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-
-        <div className="lg:col-span-5 space-y-6">
-          <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Financial Snapshot
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Recorded personal cash flow ({currency})
-                </p>
-              </div>
-
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setFinancePeriod('month')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                    financePeriod === 'month'
-                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  This Month
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFinancePeriod('all')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                    financePeriod === 'all'
-                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  All Time
-                </button>
-              </div>
-            </div>
-
-            {periodFinances.length === 0 ? (
-              <div className="py-6 text-center space-y-3">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  No financial entries recorded for this period
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Log income and expenses manually to understand your net cash flow and occasion spending.
-                </p>
-                <div className="flex items-center justify-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => onOpenQuickCreate('expense')}
-                    className="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700"
-                  >
-                    + Log Expense
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenQuickCreate('income')}
-                    className="min-h-[40px] px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200"
-                  >
-                    + Add Income
-                  </button>
+                  ))}
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                <div className="grid grid-cols-3 gap-3 pt-1">
-                  <div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Income</p>
-                    <p className="mt-1 text-base sm:text-lg font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                      {formatCurrency(totalIncome, currency)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Expenses</p>
-                    <p className="mt-1 text-base sm:text-lg font-mono font-semibold text-rose-600 dark:text-rose-400 tabular-nums">
-                      {formatCurrency(totalExpenses, currency)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Net Flow</p>
-                    <p
-                      className={`mt-1 text-base sm:text-lg font-mono font-semibold tabular-nums ${
-                        netCashFlow >= 0
-                          ? 'text-slate-900 dark:text-white'
-                          : 'text-amber-600 dark:text-amber-400'
-                      }`}
-                    >
-                      {netCashFlow >= 0 ? '+' : ''}
-                      {formatCurrency(netCashFlow, currency)}
-                    </p>
-                  </div>
-                </div>
-
-                {topExpenseCategories.length > 0 && (
-                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800/70 space-y-2.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-slate-700 dark:text-slate-300">
-                        Top Spending Categories
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onNavigate('finances', { financesTab: 'overview' })}
-                        className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
-                      >
-                        Full Breakdown
-                      </button>
-                    </div>
-
-                    <div className="space-y-2">
-                      {topExpenseCategories.map(([cat, amt]) => {
-                        const pct = totalExpenses > 0 ? Math.round((amt / totalExpenses) * 100) : 0;
-                        return (
-                          <div key={cat} className="space-y-1">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-slate-600 dark:text-slate-300 truncate">
-                                {cat}
-                              </span>
-                              <span className="font-mono text-slate-900 dark:text-white tabular-nums">
-                                {formatCurrency(amt, currency)} · {pct}%
-                              </span>
-                            </div>
-                            <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-indigo-600 dark:bg-indigo-500"
-                                style={{ width: `${Math.max(pct, 4)}%` }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Recent Memories
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Stories and photographs from your journal
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('memories', { memoriesTab: 'journal' })}
-                className="min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0"
-              >
-                <span>Open Journal</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {recentMemories.length === 0 ? (
-              <div className="py-6 text-center">
-                <ImageIcon className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Preserve meaningful stories and photos in your private journal.
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                {recentMemories.map((mem) => (
-                  <div
-                    key={mem.id}
-                    onClick={() => onNavigate('memories', { memoriesTab: 'journal' })}
-                    className="py-3.5 first:pt-1 last:pb-1 flex items-start gap-3.5 cursor-pointer group"
-                  >
-                    {mem.photoUrl && (
-                      <img
-                        src={mem.photoUrl}
-                        alt={mem.title}
-                        referrerPolicy="no-referrer"
-                        className="w-16 h-16 rounded-xl object-cover shrink-0 border border-slate-200/60 dark:border-slate-800"
-                      />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                        {formatDate(mem.date, dateFormat)}
-                        {mem.location ? ` · ${mem.location}` : ''}
-                      </p>
-                      <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">
-                        {mem.title}
-                      </h3>
-                      <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
-                        {mem.description}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6">
-            <div className="flex items-center justify-between gap-4 mb-3">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-                  Recent Attachments
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Documents, receipts, photos, and saved links
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('memories', { memoriesTab: 'attachments' })}
-                className="min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors whitespace-nowrap shrink-0"
-              >
-                Library ({db.attachments.length})
-              </button>
-            </div>
-
-            {recentAttachments.length === 0 ? (
-              <p className="text-xs text-slate-500 dark:text-slate-400 py-3">
-                No files or external links saved yet.
-              </p>
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                {recentAttachments.map((att) => (
-                  <div
-                    key={att.id}
-                    onClick={() => onNavigate('memories', { memoriesTab: 'attachments' })}
-                    className="py-2.5 first:pt-1 last:pb-1 flex items-center justify-between gap-3 cursor-pointer group"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">
-                        {att.name}
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 capitalize">
-                        {att.kind}
-                        {att.description ? ` · ${att.description}` : ''}
-                      </p>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+              )}
+            </section>
+          )}
         </div>
       </div>
     </div>

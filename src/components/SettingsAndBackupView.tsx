@@ -1,15 +1,22 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Award,
   Check,
+  CheckSquare,
   Database,
   Download,
-  Edit3,
+  Eye,
+  EyeOff,
   FileSpreadsheet,
+  Filter,
   HelpCircle,
+  Layout,
   Moon,
+  Paintbrush,
   Plus,
   RefreshCw,
+  RotateCcw,
+  Search,
   ShieldCheck,
   Sliders,
   Sparkles,
@@ -21,10 +28,18 @@ import {
 } from 'lucide-react';
 import {
   AppSettings,
+  BrandGreenShade,
+  CardStyle,
+  CornerRadius,
   CurrencyCode,
   CustomTaxonomyItem,
   DateFormatStyle,
   DNDatabase,
+  HomeSectionsVisibility,
+  InterfaceDensity,
+  PrimarySection,
+  RecurrenceType,
+  TextScale,
   ThemeMode,
   UserProfile,
 } from '../types/dn';
@@ -44,6 +59,15 @@ interface SettingsAndBackupViewProps {
   onLoadDemoDatabase: () => void;
 }
 
+type SettingsSectionTab =
+  | 'essential'
+  | 'home'
+  | 'modules'
+  | 'appearance'
+  | 'taxonomy'
+  | 'data'
+  | 'profile';
+
 export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
   db,
   onUpdateProfile,
@@ -52,9 +76,10 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
   onResetDatabase,
   onLoadDemoDatabase,
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'taxonomy' | 'backup'>('profile');
+  const [activeTab, setActiveTab] = useState<SettingsSectionTab>('essential');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Profile Form State
+  // Profile form state
   const [displayName, setDisplayName] = useState(db.profile.displayName);
   const [nickname, setNickname] = useState(db.profile.nickname);
   const [bio, setBio] = useState(db.profile.bio);
@@ -62,7 +87,7 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
   const [photoUrl, setPhotoUrl] = useState(db.profile.photoUrl || '');
   const [profileSaved, setProfileSaved] = useState(false);
 
-  // Taxonomy new item states
+  // Taxonomy states
   const [newMomentType, setNewMomentType] = useState('');
   const [newExpenseCategory, setNewExpenseCategory] = useState('');
   const [newIncomeType, setNewIncomeType] = useState('');
@@ -73,6 +98,7 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showDemoConfirm, setShowDemoConfirm] = useState(false);
+  const [showResetAppearanceConfirm, setShowResetAppearanceConfirm] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -80,6 +106,9 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const currentSettings = db.settings;
+
+  // Handle Profile Save
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     onUpdateProfile({
@@ -90,7 +119,7 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
       photoUrl: photoUrl.trim() || undefined,
     });
     setProfileSaved(true);
-    showToast('Profile updated successfully');
+    showToast('Profile updated');
     setTimeout(() => setProfileSaved(false), 2000);
   };
 
@@ -107,7 +136,21 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
     }
   };
 
-  // Taxonomy helpers
+  // Reset Appearance Settings to Defaults
+  const handleResetAppearance = () => {
+    onUpdateSettings({
+      theme: 'system',
+      brandGreenShade: 'botanical',
+      density: 'balanced',
+      cardStyle: 'bordered',
+      cornerRadius: 'refined',
+      textScale: 'default',
+      reducedMotion: false,
+    });
+    showToast('Appearance restored to natural defaults');
+  };
+
+  // Taxonomy Helpers
   const toggleTaxonomy = (
     listName: 'momentTypes' | 'expenseCategories' | 'incomeTypes',
     itemId: string
@@ -117,7 +160,7 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
       item.id === itemId ? { ...item, enabled: !item.enabled } : item
     );
     onUpdateSettings({ [listName]: updated });
-    showToast('Updated taxonomy options');
+    showToast('Taxonomy option updated');
   };
 
   const removeCustomTaxonomy = (
@@ -185,13 +228,13 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
   };
 
   // CSV Exports
-  const handleExportCSV = (type: 'moments' | 'finances' | 'memories') => {
+  const handleExportCSV = (type: 'moments' | 'finances' | 'memories' | 'activities') => {
     let headers: string[] = [];
     let rows: string[][] = [];
     let filename = '';
 
     if (type === 'moments') {
-      headers = ['ID', 'Title', 'Type', 'Date', 'Recurrence', 'Status', 'Description', 'Notes'];
+      headers = ['ID', 'Title', 'Type', 'Date', 'Recurrence', 'Status', 'Description'];
       rows = db.moments.map((m) => [
         m.id,
         `"${m.title.replace(/"/g, '""')}"`,
@@ -200,9 +243,19 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
         m.recurrence,
         m.status,
         `"${(m.description || '').replace(/"/g, '""')}"`,
-        `"${(m.notes || '').replace(/"/g, '""')}"`,
       ]);
-      filename = `dn-moments-${new Date().toISOString().split('T')[0]}.csv`;
+      filename = `dn-events-${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (type === 'activities') {
+      headers = ['ID', 'Title', 'Date', 'Priority', 'Completed', 'LinkedEventID'];
+      rows = db.activities.map((a) => [
+        a.id,
+        `"${a.title.replace(/"/g, '""')}"`,
+        a.date,
+        a.priority,
+        String(a.completed),
+        a.momentId || '',
+      ]);
+      filename = `dn-activities-${new Date().toISOString().split('T')[0]}.csv`;
     } else if (type === 'finances') {
       headers = ['ID', 'Date', 'Type', 'Amount', 'Category', 'Title', 'Notes'];
       rows = db.finances.map((f) => [
@@ -241,7 +294,7 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
     showToast(`Exported ${type} to CSV`);
   };
 
-  // Restore file picker
+  // Restore file picked
   const handleRestoreFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -256,7 +309,6 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
       }
     };
     reader.readAsText(file);
-    // Reset file input value so same file can be picked again if desired
     e.target.value = '';
   };
 
@@ -269,387 +321,740 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
     }
   };
 
+  // Toggle Home Section
+  const toggleHomeSection = (key: keyof HomeSectionsVisibility) => {
+    const current = db.settings.homeSections || {
+      focus: true,
+      events: true,
+      activities: true,
+      memories: true,
+      onThisDay: true,
+      finances: true,
+    };
+    onUpdateSettings({
+      homeSections: {
+        ...current,
+        [key]: !current[key],
+      },
+    });
+    showToast('Updated home dashboard visibility');
+  };
+
   return (
     <div className="space-y-6">
-      {/* Toast */}
+      {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-18 right-4 z-50 rounded-xl bg-slate-900 text-white px-4 py-2.5 shadow-xl text-xs sm:text-sm font-medium border border-slate-700 animate-fade-in">
           {toastMessage}
         </div>
       )}
 
-      {/* Top Header Card */}
-      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs">
+      {/* Header Profile Summary Card */}
+      <div className="dn-card p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5">
             <div className="relative">
               {db.profile.photoUrl ? (
                 <img
                   src={db.profile.photoUrl}
                   alt={db.profile.displayName}
-                  className="h-14 w-14 rounded-full object-cover border-2 border-indigo-500 shadow-xs"
+                  className="h-14 w-14 rounded-full object-cover border-2 border-[#286747] dark:border-[#70A987] shadow-xs"
                 />
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-bold text-xl shadow-xs">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] font-bold text-xl shadow-xs">
                   {db.profile.displayName ? db.profile.displayName.charAt(0).toUpperCase() : 'D'}
                 </div>
               )}
-              <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
+              <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-slate-900 dark:text-white">
                   {db.profile.displayName}
                 </h1>
-                <span className="rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-xs px-2 py-0.5 font-medium">
+                <span className="rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs px-2 py-0.5 font-medium border border-emerald-200/50 dark:border-emerald-900/50">
                   {db.profile.nickname}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
-                {db.profile.bio || 'Your private life companion'}
+                {db.profile.bio || 'Your private, intentional digital space'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
-              <ShieldCheck className="h-4 w-4 text-emerald-500" />
-              <span>Offline & Private on device</span>
+              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Private & Local on Device</span>
             </div>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex gap-2 border-t border-slate-100 dark:border-slate-800 pt-4 mt-5 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors shrink-0 ${
-              activeTab === 'profile'
-                ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-            }`}
-          >
-            <User className="h-4 w-4" />
-            Profile & Identity
-          </button>
-          <button
-            onClick={() => setActiveTab('preferences')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors shrink-0 ${
-              activeTab === 'preferences'
-                ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-            }`}
-          >
-            <Sliders className="h-4 w-4" />
-            Preferences & Format
-          </button>
-          <button
-            onClick={() => setActiveTab('taxonomy')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors shrink-0 ${
-              activeTab === 'taxonomy'
-                ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-            }`}
-          >
-            <Sparkles className="h-4 w-4" />
-            Categories & Types
-          </button>
-          <button
-            onClick={() => setActiveTab('backup')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors shrink-0 ${
-              activeTab === 'backup'
-                ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-            }`}
-          >
-            <Database className="h-4 w-4" />
-            Backup & Data
-          </button>
+        {/* Search bar inside Settings */}
+        <div className="mt-5 relative">
+          <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search settings (e.g., theme, density, currency, events, finances)..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-[#286747]"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Category Tabs */}
+        <div className="flex gap-2 border-t border-slate-100 dark:border-slate-800 pt-4 mt-4 overflow-x-auto no-scrollbar">
+          {(
+            [
+              { id: 'essential', label: 'Essential', icon: Sliders },
+              { id: 'home', label: 'Home Screen', icon: Layout },
+              { id: 'modules', label: 'Modules', icon: CheckSquare },
+              { id: 'appearance', label: 'Appearance', icon: Paintbrush },
+              { id: 'taxonomy', label: 'Categories', icon: Sparkles },
+              { id: 'data', label: 'Backup & Data', icon: Database },
+              { id: 'profile', label: 'Profile', icon: User },
+            ] as { id: SettingsSectionTab; label: string; icon: any }[]
+          ).map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors shrink-0 ${
+                  active
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-[#286747] dark:text-[#70A987] font-semibold border border-emerald-200/50 dark:border-emerald-900/50'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* TAB 1: PROFILE */}
-      {activeTab === 'profile' && (
-        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
-            Personal Profile
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
-            Your identity details are stored purely inside this browser session and device storage.
-          </p>
+      {/* 1. ESSENTIAL SETTINGS */}
+      {(activeTab === 'essential' || searchQuery) && (
+        <div className="dn-card p-5 sm:p-6 space-y-5">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Essential Controls
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Theme, regional conventions, and default application landing screen.
+            </p>
+          </div>
 
-          <form onSubmit={handleSaveProfile} className="space-y-4 max-w-xl">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Full Name / Display Name
-                </label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Greeting / Nickname
-                </label>
-                <input
-                  type="text"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="e.g. Aarav"
-                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+            {/* Theme */}
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Personal Bio / Life Intention
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Color Mode
               </label>
-              <textarea
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                rows={3}
-                placeholder="What is your focus or personal motto?"
-                className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { mode: 'light', label: 'Light', icon: Sun },
+                  { mode: 'dark', label: 'Dark Forest', icon: Moon },
+                  { mode: 'system', label: 'System', icon: Sliders },
+                ].map(({ mode, label, icon: Icon }) => (
+                  <button
+                    key={mode}
+                    onClick={() => {
+                      onUpdateSettings({ theme: mode as ThemeMode });
+                      showToast(`Theme set to ${label}`);
+                    }}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs font-medium transition-all ${
+                      currentSettings.theme === mode
+                        ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50/60 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] font-semibold'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Density */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Interface Density
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { density: 'compact', label: 'Compact' },
+                  { density: 'balanced', label: 'Balanced' },
+                  { density: 'comfortable', label: 'Comfortable' },
+                ].map(({ density, label }) => (
+                  <button
+                    key={density}
+                    onClick={() => {
+                      onUpdateSettings({ density: density as InterfaceDensity });
+                      showToast(`Density set to ${label}`);
+                    }}
+                    className={`py-3 px-2 rounded-xl border text-xs font-medium text-center transition-all ${
+                      (currentSettings.density || 'balanced') === density
+                        ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50/60 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] font-semibold'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Currency */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Currency
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {(['INR', 'USD', 'EUR', 'GBP'] as CurrencyCode[]).map((cur) => (
+                  <button
+                    key={cur}
+                    onClick={() => {
+                      onUpdateSettings({ currency: cur });
+                      showToast(`Currency set to ${cur}`);
+                    }}
+                    className={`py-2 px-1 text-center rounded-xl border text-xs font-medium ${
+                      currentSettings.currency === cur
+                        ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50/60 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] font-bold'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {cur}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Date Format */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Date Display
+              </label>
+              <select
+                value={currentSettings.dateFormat}
+                onChange={(e) => {
+                  onUpdateSettings({ dateFormat: e.target.value as DateFormatStyle });
+                  showToast('Date format updated');
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              >
+                <option value="dd-mmm-yyyy">09 Oct 2026 (DD MMM YYYY)</option>
+                <option value="mmm-dd-yyyy">Oct 09, 2026 (MMM DD, YYYY)</option>
+                <option value="yyyy-mm-dd">2026-10-09 (ISO)</option>
+              </select>
+            </div>
+
+            {/* Default Landing Screen */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Default Landing Screen
+              </label>
+              <select
+                value={currentSettings.defaultLanding || 'home'}
+                onChange={(e) => {
+                  onUpdateSettings({ defaultLanding: e.target.value as PrimarySection });
+                  showToast('Default landing screen saved');
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              >
+                <option value="home">Home (Overview Dashboard)</option>
+                <option value="events">Events & Occasions</option>
+                <option value="activities">Activities & Tasks</option>
+                <option value="memories">Memories & Journal</option>
+                <option value="attachments">Attachments Library</option>
+                <option value="finances">Personal Finances</option>
+              </select>
+            </div>
+
+            {/* Week start day */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Week Starts On
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['monday', 'sunday'] as const).map((day) => (
+                  <button
+                    key={day}
+                    onClick={() => {
+                      onUpdateSettings({ weekStartDay: day });
+                      showToast(`Week start set to ${day}`);
+                    }}
+                    className={`py-2 px-2 capitalize rounded-xl border text-xs font-medium text-center ${
+                      (currentSettings.weekStartDay || 'monday') === day
+                        ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50/60 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] font-semibold'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. HOME SCREEN PERSONALIZATION */}
+      {(activeTab === 'home' || searchQuery) && (
+        <div className="dn-card p-5 sm:p-6 space-y-5">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Home Screen Personalization
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Control which sections appear on your day view, privacy settings, and visual focus.
+            </p>
+          </div>
+
+          {/* Section Visibility Toggles */}
+          <div className="space-y-3 pt-2">
+            <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              Dashboard Sections
+            </h3>
+
+            {(
+              [
+                { key: 'focus', label: "Today's Focus & Quick Actions", desc: 'Greeting header with quick entries' },
+                { key: 'events', label: 'Upcoming Occasions & Countdowns', desc: 'Birthdays, anniversaries, and holidays' },
+                { key: 'activities', label: "Today's Activities & Checklists", desc: 'Quick completion of pending tasks' },
+                { key: 'onThisDay', label: 'On This Day Flashbacks', desc: 'Resurface meaningful memories from this day in past years' },
+                { key: 'memories', label: 'Recent Memories Gallery', desc: 'Highlights from your photo and written journal' },
+                { key: 'finances', label: 'Monthly Cash Flow Snapshot', desc: 'Income, recorded spending, and net balance' },
+              ] as { key: keyof HomeSectionsVisibility; label: string; desc: string }[]
+            ).map(({ key, label, desc }) => {
+              const visible = currentSettings.homeSections
+                ? currentSettings.homeSections[key] !== false
+                : true;
+
+              return (
+                <div
+                  key={key}
+                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/40"
+                >
+                  <div>
+                    <p className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white">
+                      {label}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">{desc}</p>
+                  </div>
+                  <button
+                    onClick={() => toggleHomeSection(key)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      visible
+                        ? 'bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612]'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    <span>{visible ? 'Visible' : 'Hidden'}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Privacy Toggle: Hide finances on home */}
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div>
+              <p className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white">
+                Privacy: Hide Financial Figures on Home
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Keeps numbers masked or hides financial widgets when opening DN in public.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                onUpdateSettings({ hideFinancesOnHome: !currentSettings.hideFinancesOnHome });
+                showToast('Home privacy preference updated');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
+                currentSettings.hideFinancesOnHome
+                  ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 font-semibold'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              {currentSettings.hideFinancesOnHome ? 'Figures Hidden' : 'Show Figures'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. MODULE PREFERENCES */}
+      {(activeTab === 'modules' || searchQuery) && (
+        <div className="dn-card p-5 sm:p-6 space-y-6">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Module-Specific Preferences
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Customize how each independent area behaves and displays its information.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Events Preferences */}
+            <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                Events & Occasions
+              </h3>
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Device Name / Companion Label
+                <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                  Default View Layout
+                </label>
+                <div className="grid grid-cols-3 gap-1.5 text-xs">
+                  {(['list', 'calendar', 'timeline'] as const).map((view) => (
+                    <button
+                      key={view}
+                      onClick={() => {
+                        onUpdateSettings({ eventViewMode: view });
+                        showToast(`Events layout set to ${view}`);
+                      }}
+                      className={`py-1.5 capitalize rounded-lg border text-center ${
+                        (currentSettings.eventViewMode || 'list') === view
+                          ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] font-semibold'
+                          : 'border-slate-200 dark:border-slate-800'
+                      }`}
+                    >
+                      {view}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                  Default Recurrence
+                </label>
+                <select
+                  value={currentSettings.defaultRecurrence || 'none'}
+                  onChange={(e) => {
+                    onUpdateSettings({ defaultRecurrence: e.target.value as RecurrenceType });
+                    showToast('Default recurrence updated');
+                  }}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                >
+                  <option value="none">One-time (No Recurrence)</option>
+                  <option value="yearly">Yearly (Birthdays, Anniversaries)</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Activities Preferences */}
+            <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                Activities & Tasks
+              </h3>
+              <div>
+                <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                  Default Sorting
+                </label>
+                <div className="grid grid-cols-3 gap-1.5 text-xs">
+                  {[
+                    { id: 'date', label: 'By Date' },
+                    { id: 'priority', label: 'Priority' },
+                    { id: 'alphabetical', label: 'Name' },
+                  ].map(({ id, label }) => (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        onUpdateSettings({ activitySort: id as any });
+                        showToast(`Activity sort set to ${label}`);
+                      }}
+                      className={`py-1.5 rounded-lg border text-center ${
+                        (currentSettings.activitySort || 'date') === id
+                          ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] font-semibold'
+                          : 'border-slate-200 dark:border-slate-800'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                  Card Style
+                </label>
+                <div className="grid grid-cols-2 gap-1.5 text-xs">
+                  {(['detailed', 'compact'] as const).map((style) => (
+                    <button
+                      key={style}
+                      onClick={() => {
+                        onUpdateSettings({ activityCardStyle: style });
+                        showToast(`Activity card set to ${style}`);
+                      }}
+                      className={`py-1.5 capitalize rounded-lg border text-center ${
+                        (currentSettings.activityCardStyle || 'detailed') === style
+                          ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] font-semibold'
+                          : 'border-slate-200 dark:border-slate-800'
+                      }`}
+                    >
+                      {style}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Memories Preferences */}
+            <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                Memories & Journal
+              </h3>
+              <div>
+                <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                  Preferred Presentation
+                </label>
+                <div className="grid grid-cols-3 gap-1.5 text-xs">
+                  {(['gallery', 'timeline', 'list'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => {
+                        onUpdateSettings({ memoryViewMode: mode });
+                        showToast(`Memories layout set to ${mode}`);
+                      }}
+                      className={`py-1.5 capitalize rounded-lg border text-center ${
+                        (currentSettings.memoryViewMode || 'gallery') === mode
+                          ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50 dark:bg-emerald-950/40 text-[#286747] dark:text-[#70A987] font-semibold'
+                          : 'border-slate-200 dark:border-slate-800'
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Finances Preferences */}
+            <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                Personal Finances
+              </h3>
+              <div>
+                <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                  Start Day of Financial Month (1-28)
                 </label>
                 <input
-                  type="text"
-                  value={deviceName}
-                  onChange={(e) => setDeviceName(e.target.value)}
-                  placeholder="e.g. Personal iPhone"
-                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={currentSettings.financialMonthStartDay || 1}
+                  onChange={(e) => {
+                    const val = Math.max(1, Math.min(28, parseInt(e.target.value) || 1));
+                    onUpdateSettings({ financialMonthStartDay: val });
+                  }}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 />
               </div>
-
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Avatar / Profile Photo
+                <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                  Default Reporting Window
                 </label>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer">
-                    <Upload className="h-3.5 w-3.5" />
-                    <span>Choose File</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleProfilePhotoChange}
-                      className="hidden"
-                    />
-                  </label>
-                  {photoUrl && (
-                    <button
-                      type="button"
-                      onClick={() => setPhotoUrl('')}
-                      className="text-xs text-rose-500 hover:underline"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-3 flex items-center gap-3">
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-xs transition-colors"
-              >
-                {profileSaved ? <Check className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
-                {profileSaved ? 'Profile Saved' : 'Save Changes'}
-              </button>
-            </div>
-          </form>
-
-          {/* Quick Life Stats Summary */}
-          <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-              <Award className="h-4 w-4 text-indigo-500" />
-              Life Journal Milestones
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60">
-                <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                  {db.moments.length}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Moments Logged</p>
-              </div>
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60">
-                <p className="text-2xl font-bold text-violet-600 dark:text-violet-400 tabular-nums">
-                  {db.memories.length}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Memories Preserved</p>
-              </div>
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60">
-                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                  {db.activities.filter((a) => a.completed).length}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Completed Tasks</p>
-              </div>
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60">
-                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">
-                  {db.finances.length}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Financial Entries</p>
+                <select
+                  value={currentSettings.defaultReportingPeriod || 'month'}
+                  onChange={(e) => {
+                    onUpdateSettings({ defaultReportingPeriod: e.target.value as any });
+                    showToast('Reporting period updated');
+                  }}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                >
+                  <option value="month">This Month</option>
+                  <option value="quarter">Last 90 Days</option>
+                  <option value="year">Full Year (365 Days)</option>
+                  <option value="all">All-Time History</option>
+                </select>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 2: PREFERENCES & FORMAT */}
-      {activeTab === 'preferences' && (
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
-              Visual Appearance & Theme
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
-              Choose your preferred interface theme. Changes take effect instantly and stay saved.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl">
-              <button
-                onClick={() => {
-                  onUpdateSettings({ theme: 'light' });
-                  showToast('Light mode active');
-                }}
-                className={`flex items-center gap-3 p-4 rounded-xl border text-left transition-all ${
-                  db.settings.theme === 'light'
-                    ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                }`}
-              >
-                <div className="h-10 w-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                  <Sun className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Light Theme</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Clean, crisp daylight palette</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  onUpdateSettings({ theme: 'dark' });
-                  showToast('Dark mode active');
-                }}
-                className={`flex items-center gap-3 p-4 rounded-xl border text-left transition-all ${
-                  db.settings.theme === 'dark'
-                    ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                }`}
-              >
-                <div className="h-10 w-10 rounded-lg bg-indigo-950 text-indigo-300 flex items-center justify-center shrink-0">
-                  <Moon className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Dark Theme</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Deep slate midnight palette</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  onUpdateSettings({ theme: 'system' });
-                  showToast('System theme enabled');
-                }}
-                className={`flex items-center gap-3 p-4 rounded-xl border text-left transition-all ${
-                  db.settings.theme === 'system'
-                    ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                }`}
-              >
-                <div className="h-10 w-10 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
-                  <Sliders className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">System Sync</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Matches device settings</p>
-                </div>
-              </button>
+      {/* 4. APPEARANCE & AESTHETICS (Personal) */}
+      {(activeTab === 'appearance' || searchQuery) && (
+        <div className="dn-card p-5 sm:p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                Appearance & Tactile Design
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Fine-tune green shades, surface styles, corner radii, and text scaling.
+              </p>
             </div>
+            <button
+              onClick={() => setShowResetAppearanceConfirm(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Reset to Defaults</span>
+            </button>
           </div>
 
-          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
-              Currency & Date Formats
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
-              Tailor financial and calendar presentation to your regional preference.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Currency Display
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(
-                    [
-                      { code: 'INR', label: 'INR (₹)' },
-                      { code: 'USD', label: 'USD ($)' },
-                      { code: 'EUR', label: 'EUR (€)' },
-                      { code: 'GBP', label: 'GBP (£)' },
-                    ] as { code: CurrencyCode; label: string }[]
-                  ).map((item) => (
+          <div className="space-y-5 pt-2">
+            {/* Green Shade Selection */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Signature Green Palette
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {[
+                  { shade: 'botanical', name: 'Botanical Green', hex: '#286747' },
+                  { shade: 'forest', name: 'Deep Forest', hex: '#194A35' },
+                  { shade: 'evergreen', name: 'Evergreen Pine', hex: '#1E5A3D' },
+                  { shade: 'moss', name: 'Muted Moss', hex: '#3D6E50' },
+                ].map(({ shade, name, hex }) => {
+                  const selected = (currentSettings.brandGreenShade || 'botanical') === shade;
+                  return (
                     <button
-                      key={item.code}
+                      key={shade}
                       onClick={() => {
-                        onUpdateSettings({ currency: item.code });
-                        showToast(`Currency changed to ${item.label}`);
+                        onUpdateSettings({ brandGreenShade: shade as BrandGreenShade });
+                        showToast(`Green shade changed to ${name}`);
                       }}
-                      className={`p-3 rounded-xl border text-xs font-semibold text-center transition-all ${
-                        db.settings.currency === item.code
-                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400'
-                          : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                      className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all ${
+                        selected
+                          ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50/40 dark:bg-emerald-950/30'
+                          : 'border-slate-200 dark:border-slate-800'
                       }`}
                     >
-                      {item.label}
+                      <span
+                        className="h-5 w-5 rounded-full shrink-0 shadow-xs border border-white/20"
+                        style={{ backgroundColor: hex }}
+                      />
+                      <span className="text-xs font-medium text-slate-900 dark:text-white">
+                        {name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Card Style */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Card Presentation
+              </label>
+              <div className="grid grid-cols-3 gap-2.5">
+                {[
+                  { id: 'minimal', label: 'Minimal', desc: 'Flat with subtle surface contrast' },
+                  { id: 'bordered', label: 'Bordered', desc: 'Fine hairline border (Recommended)' },
+                  { id: 'softly-elevated', label: 'Soft Elevation', desc: 'Gentle, restrained shadow' },
+                ].map(({ id, label, desc }) => (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      onUpdateSettings({ cardStyle: id as CardStyle });
+                      showToast(`Card style set to ${label}`);
+                    }}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      (currentSettings.cardStyle || 'bordered') === id
+                        ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50/40 dark:bg-emerald-950/30 font-semibold'
+                        : 'border-slate-200 dark:border-slate-800'
+                    }`}
+                  >
+                    <p className="text-xs font-semibold text-slate-900 dark:text-white">{label}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Corner Radius */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Corner Geometry
+              </label>
+              <div className="grid grid-cols-3 gap-2.5">
+                {[
+                  { id: 'sharp', label: 'Sharp (6px)' },
+                  { id: 'refined', label: 'Refined (12px)' },
+                  { id: 'rounded', label: 'Softly Rounded (20px)' },
+                ].map(({ id, label }) => (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      onUpdateSettings({ cornerRadius: id as CornerRadius });
+                      showToast(`Corner radius set to ${label}`);
+                    }}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-medium text-center transition-all ${
+                      (currentSettings.cornerRadius || 'refined') === id
+                        ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50/40 dark:bg-emerald-950/30 font-semibold text-[#286747] dark:text-[#70A987]'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Text Scale & Motion */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Typography Size
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'compact', label: 'Small' },
+                    { id: 'default', label: 'Standard' },
+                    { id: 'large', label: 'Comfortable' },
+                  ].map(({ id, label }) => (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        onUpdateSettings({ textScale: id as TextScale });
+                        showToast(`Text scale set to ${label}`);
+                      }}
+                      className={`py-2 px-1 text-center rounded-xl border text-xs font-medium ${
+                        (currentSettings.textScale || 'default') === id
+                          ? 'border-[#286747] dark:border-[#70A987] bg-emerald-50/40 dark:bg-emerald-950/30 font-semibold text-[#286747] dark:text-[#70A987]'
+                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      {label}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Date Formatting
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Reduced Motion
                 </label>
-                <div className="space-y-2">
-                  {(
-                    [
-                      { style: 'dd-mmm-yyyy', label: '09 Oct 2026 (DD MMM YYYY)' },
-                      { style: 'mmm-dd-yyyy', label: 'Oct 09, 2026 (MMM DD, YYYY)' },
-                      { style: 'yyyy-mm-dd', label: '2026-10-09 (ISO Standard)' },
-                    ] as { style: DateFormatStyle; label: string }[]
-                  ).map((item) => (
-                    <button
-                      key={item.style}
-                      onClick={() => {
-                        onUpdateSettings({ dateFormat: item.style });
-                        showToast(`Date format set to ${item.style}`);
-                      }}
-                      className={`w-full p-2.5 rounded-xl border text-xs font-medium text-left transition-all ${
-                        db.settings.dateFormat === item.style
-                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold'
-                          : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40">
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                    Minimize UI animations
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(currentSettings.reducedMotion)}
+                    onChange={(e) => {
+                      onUpdateSettings({ reducedMotion: e.target.checked });
+                      showToast(e.target.checked ? 'Reduced motion enabled' : 'Smooth animations enabled');
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-[#286747] focus:ring-[#286747]"
+                  />
                 </div>
               </div>
             </div>
@@ -657,25 +1062,25 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
         </div>
       )}
 
-      {/* TAB 3: CATEGORIES & TAXONOMY */}
-      {activeTab === 'taxonomy' && (
-        <div className="space-y-6">
+      {/* 5. TAXONOMY & CATEGORIES */}
+      {(activeTab === 'taxonomy' || searchQuery) && (
+        <div className="space-y-5">
           {/* Moment Types */}
-          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs">
+          <div className="dn-card p-5 sm:p-6">
             <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
-              Moment Occasion Types
+              Event & Occasion Types
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Toggle types on or off. Disabling an item hides it from new dropdowns without deleting past records.
+              Toggle types on or off. Disabling hides an option from new pickers without deleting past records.
             </p>
 
             <div className="flex flex-wrap gap-2 mb-4">
-              {db.settings.momentTypes.map((type) => (
+              {currentSettings.momentTypes.map((type) => (
                 <div
                   key={type.id}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
                     type.enabled
-                      ? 'border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200'
+                      ? 'border-emerald-200/80 dark:border-emerald-800/80 bg-emerald-50/70 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200'
                       : 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/40 text-slate-400 line-through'
                   }`}
                 >
@@ -690,7 +1095,6 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
                     <button
                       onClick={() => removeCustomTaxonomy('momentTypes', type.id)}
                       className="ml-1 text-slate-400 hover:text-rose-500"
-                      title="Delete custom occasion"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -711,14 +1115,14 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
                     addCustomTaxonomy('momentTypes', newMomentType, () => setNewMomentType(''));
                   }
                 }}
-                className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
               />
               <button
                 type="button"
                 onClick={() =>
                   addCustomTaxonomy('momentTypes', newMomentType, () => setNewMomentType(''))
                 }
-                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+                className="px-3.5 py-1.5 rounded-xl bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] text-xs font-semibold"
               >
                 Add
               </button>
@@ -726,22 +1130,22 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
           </div>
 
           {/* Expense Categories */}
-          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs">
+          <div className="dn-card p-5 sm:p-6">
             <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
               Expense Categories
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Categories used to categorize spending entries and budget trends.
+              Categories used to group spending records and budget insights.
             </p>
 
             <div className="flex flex-wrap gap-2 mb-4">
-              {db.settings.expenseCategories.map((cat) => (
+              {currentSettings.expenseCategories.map((cat) => (
                 <div
                   key={cat.id}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
                     cat.enabled
-                      ? 'border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/40 text-slate-400 line-through'
+                      ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/20 text-slate-400 line-through'
                   }`}
                 >
                   <button
@@ -776,7 +1180,7 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
                     );
                   }
                 }}
-                className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
               />
               <button
                 type="button"
@@ -785,70 +1189,7 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
                     setNewExpenseCategory('')
                   )
                 }
-                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
-              >
-                Add
-              </button>
-            </div>
-          </div>
-
-          {/* Income Types */}
-          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
-              Income Sources
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Sources used to classify inbound cashflow and salary entries.
-            </p>
-
-            <div className="flex flex-wrap gap-2 mb-4">
-              {db.settings.incomeTypes.map((inc) => (
-                <div
-                  key={inc.id}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
-                    inc.enabled
-                      ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/40 text-slate-400 line-through'
-                  }`}
-                >
-                  <button
-                    onClick={() => toggleTaxonomy('incomeTypes', inc.id)}
-                    className="hover:underline"
-                  >
-                    {inc.name}
-                  </button>
-                  {!inc.isBuiltIn && (
-                    <button
-                      onClick={() => removeCustomTaxonomy('incomeTypes', inc.id)}
-                      className="ml-1 text-slate-400 hover:text-rose-500"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2 max-w-sm">
-              <input
-                type="text"
-                placeholder="Add custom income type..."
-                value={newIncomeType}
-                onChange={(e) => setNewIncomeType(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addCustomTaxonomy('incomeTypes', newIncomeType, () => setNewIncomeType(''));
-                  }
-                }}
-                className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  addCustomTaxonomy('incomeTypes', newIncomeType, () => setNewIncomeType(''))
-                }
-                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+                className="px-3.5 py-1.5 rounded-xl bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] text-xs font-semibold"
               >
                 Add
               </button>
@@ -857,22 +1198,21 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
         </div>
       )}
 
-      {/* TAB 4: BACKUP & DATA */}
-      {activeTab === 'backup' && (
-        <div className="space-y-6">
-          {/* Download Backup */}
-          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs">
+      {/* 6. DATA & BACKUP */}
+      {(activeTab === 'data' || searchQuery) && (
+        <div className="space-y-5">
+          {/* Download JSON Backup */}
+          <div className="dn-card p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
-                  Download Full JSON Backup
+                  Download Encrypted-Ready JSON Backup
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                  Export your entire database into an encrypted-ready, human-readable JSON format.
-                  Keep this file on your personal storage for complete peace of mind.
+                  Export your entire database into human-readable JSON format for private safe-keeping.
                 </p>
               </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 shrink-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-[#286747] dark:text-[#70A987] shrink-0">
                 <Download className="h-5 w-5" />
               </div>
             </div>
@@ -883,17 +1223,17 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
                 id="includeAttachments"
                 checked={includeAttachmentsInBackup}
                 onChange={(e) => setIncludeAttachmentsInBackup(e.target.checked)}
-                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                className="rounded border-slate-300 text-[#286747] focus:ring-[#286747]"
               />
               <label htmlFor="includeAttachments" className="cursor-pointer">
-                Include attached photo data and base64 media (uncheck for a smaller, faster text-only backup)
+                Include attached photo data and base64 files
               </label>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={handleDownloadBackup}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-xs transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] dark:hover:bg-[#84BD9A] text-white dark:text-[#101612] text-xs sm:text-sm font-semibold shadow-xs transition-colors"
               >
                 <Download className="h-4 w-4" />
                 Download JSON Backup
@@ -901,74 +1241,79 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
 
               {db.profile.lastBackupAt && (
                 <span className="text-xs text-slate-400">
-                  Last downloaded: {formatDate(db.profile.lastBackupAt.split('T')[0], db.settings.dateFormat)}
+                  Last backup: {formatDate(db.profile.lastBackupAt.split('T')[0], currentSettings.dateFormat)}
                 </span>
               )}
             </div>
           </div>
 
           {/* CSV Exports */}
-          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs">
+          <div className="dn-card p-5 sm:p-6">
             <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
               Spreadsheet CSV Exports
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Export specific areas into standard CSV files suitable for Microsoft Excel or Google Sheets.
+              Export independent area records for use in Microsoft Excel or Google Sheets.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <button
                 onClick={() => handleExportCSV('moments')}
-                className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/50 dark:bg-slate-800/40 text-left transition-colors"
+                className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-900/40 text-left transition-colors"
               >
                 <div>
-                  <p className="text-xs font-semibold text-slate-900 dark:text-white">Moments CSV</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {db.moments.length} occasions
-                  </p>
+                  <p className="text-xs font-semibold text-slate-900 dark:text-white">Events CSV</p>
+                  <p className="text-[11px] text-slate-400">{db.moments.length} records</p>
                 </div>
-                <FileSpreadsheet className="h-4 w-4 text-indigo-500 shrink-0" />
+                <FileSpreadsheet className="h-4 w-4 text-[#286747] dark:text-[#70A987]" />
+              </button>
+
+              <button
+                onClick={() => handleExportCSV('activities')}
+                className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-900/40 text-left transition-colors"
+              >
+                <div>
+                  <p className="text-xs font-semibold text-slate-900 dark:text-white">Activities CSV</p>
+                  <p className="text-[11px] text-slate-400">{db.activities.length} tasks</p>
+                </div>
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
               </button>
 
               <button
                 onClick={() => handleExportCSV('finances')}
-                className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/50 dark:bg-slate-800/40 text-left transition-colors"
+                className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-900/40 text-left transition-colors"
               >
                 <div>
                   <p className="text-xs font-semibold text-slate-900 dark:text-white">Finances CSV</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {db.finances.length} records
-                  </p>
+                  <p className="text-[11px] text-slate-400">{db.finances.length} records</p>
                 </div>
-                <FileSpreadsheet className="h-4 w-4 text-emerald-500 shrink-0" />
+                <FileSpreadsheet className="h-4 w-4 text-amber-600" />
               </button>
 
               <button
                 onClick={() => handleExportCSV('memories')}
-                className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/50 dark:bg-slate-800/40 text-left transition-colors"
+                className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-900/40 text-left transition-colors"
               >
                 <div>
                   <p className="text-xs font-semibold text-slate-900 dark:text-white">Memories CSV</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {db.memories.length} entries
-                  </p>
+                  <p className="text-[11px] text-slate-400">{db.memories.length} entries</p>
                 </div>
-                <FileSpreadsheet className="h-4 w-4 text-violet-500 shrink-0" />
+                <FileSpreadsheet className="h-4 w-4 text-violet-500" />
               </button>
             </div>
           </div>
 
           {/* Restore Database */}
-          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs">
+          <div className="dn-card p-5 sm:p-6">
             <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
               Restore from Backup
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Select a valid DN JSON backup file. You will see a detailed summary preview before anything is applied.
+              Select a valid DN JSON backup. A comprehensive verification preview will appear before any data is replaced.
             </p>
 
             <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs sm:text-sm font-semibold cursor-pointer transition-colors">
-              <Upload className="h-4 w-4 text-indigo-500" />
+              <Upload className="h-4 w-4 text-[#286747] dark:text-[#70A987]" />
               <span>Select Backup File (.json)</span>
               <input
                 type="file"
@@ -979,20 +1324,20 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
             </label>
           </div>
 
-          {/* Workspace Controls & Reset */}
-          <div className="rounded-2xl border border-rose-200/80 dark:border-rose-950/60 bg-rose-50/30 dark:bg-rose-950/20 p-5 sm:p-6">
+          {/* Presets and Workspace Reset */}
+          <div className="p-5 sm:p-6 rounded-2xl border border-rose-200 dark:border-rose-950/60 bg-rose-50/20 dark:bg-rose-950/20">
             <h2 className="text-base font-semibold text-rose-900 dark:text-rose-200 mb-1">
               Workspace Presets & Reset
             </h2>
             <p className="text-xs text-rose-700/80 dark:text-rose-300/70 mb-4">
-              Use sample data for testing, or reset the local database to an empty pristine state.
+              Load realistic sample data or reset your local workspace to an empty pristine state.
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={() => setShowDemoConfirm(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-900 text-xs font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950/50"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-[#286747]/30 text-[#286747] dark:text-[#70A987] bg-white dark:bg-slate-900 text-xs font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 Load Sample Life Workspace
@@ -1011,13 +1356,118 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
         </div>
       )}
 
+      {/* 7. PROFILE TAB */}
+      {(activeTab === 'profile' || searchQuery) && (
+        <div className="dn-card p-5 sm:p-6">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
+            Personal Identity & Device
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
+            Your identity details are stored purely inside this browser session and device storage.
+          </p>
+
+          <form onSubmit={handleSaveProfile} className="space-y-4 max-w-xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Full Name / Display Name
+                </label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Greeting / Nickname
+                </label>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Personal Intention / Bio
+              </label>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+                placeholder="What is your focus or personal motto?"
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Device Label
+                </label>
+                <input
+                  type="text"
+                  value={deviceName}
+                  onChange={(e) => setDeviceName(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Avatar Photo
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>Choose Photo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfilePhotoChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {photoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setPhotoUrl('')}
+                      className="text-xs text-rose-500 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#286747] dark:bg-[#70A987] hover:bg-[#194A35] dark:hover:bg-[#84BD9A] text-white dark:text-[#101612] text-sm font-semibold shadow-xs transition-colors"
+              >
+                {profileSaved ? <Check className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+                <span>{profileSaved ? 'Saved' : 'Save Changes'}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Restore Validation Modal */}
       {showRestoreModal && restoreValidation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="w-full max-w-lg dn-card p-6 shadow-xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                {restoreValidation.valid ? 'Backup Verification Preview' : 'Invalid Backup File'}
+                {restoreValidation.valid ? 'Backup Verification Preview' : 'Invalid Backup'}
               </h3>
               <button
                 onClick={() => {
@@ -1033,10 +1483,10 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
             {restoreValidation.valid && restoreValidation.summary ? (
               <div className="mt-4 space-y-4">
                 <p className="text-xs text-slate-600 dark:text-slate-300">
-                  The backup file is verified and ready to load. Here is the summary of contents that will replace your current workspace:
+                  The backup file is verified. Summary of records to restore:
                 </p>
 
-                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl">
                   <div>
                     <span className="text-slate-400">Profile Name:</span>{' '}
                     <span className="font-semibold text-slate-900 dark:text-white">
@@ -1044,45 +1494,33 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400">Database Schema:</span>{' '}
-                    <span className="font-semibold text-slate-900 dark:text-white">
-                      v{restoreValidation.summary.version}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Moments:</span>{' '}
-                    <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                    <span className="text-slate-400">Events:</span>{' '}
+                    <span className="font-semibold text-[#286747] dark:text-[#70A987]">
                       {restoreValidation.summary.momentsCount}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400">Activities:</span>{' '}
-                    <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                    <span className="font-semibold text-emerald-600">
                       {restoreValidation.summary.activitiesCount}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400">Memories:</span>{' '}
-                    <span className="font-semibold text-violet-600 dark:text-violet-400">
+                    <span className="font-semibold text-violet-600">
                       {restoreValidation.summary.memoriesCount}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400">Attachments:</span>{' '}
-                    <span className="font-semibold text-violet-600 dark:text-violet-400">
+                    <span className="font-semibold text-sky-600">
                       {restoreValidation.summary.attachmentsCount}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400">Finances:</span>{' '}
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    <span className="font-semibold text-amber-600">
                       {restoreValidation.summary.financesCount}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Greeting Cards:</span>{' '}
-                    <span className="font-semibold text-amber-600 dark:text-amber-400">
-                      {restoreValidation.summary.greetingsCount}
                     </span>
                   </div>
                 </div>
@@ -1093,13 +1531,13 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
                       setShowRestoreModal(false);
                       setRestoreValidation(null);
                     }}
-                    className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 rounded-xl"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleConfirmRestore}
-                    className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-xs"
+                    className="px-4 py-2 text-xs font-semibold bg-[#286747] dark:bg-[#70A987] text-white dark:text-[#101612] rounded-xl"
                   >
                     Apply & Restore Workspace
                   </button>
@@ -1107,8 +1545,8 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
               </div>
             ) : (
               <div className="mt-4 space-y-4">
-                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300">
-                  {restoreValidation.error || 'The file provided does not conform to the DN database schema.'}
+                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 text-xs text-rose-700">
+                  {restoreValidation.error || 'The file provided does not conform to schema.'}
                 </div>
                 <div className="flex justify-end">
                   <button
@@ -1116,7 +1554,7 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
                       setShowRestoreModal(false);
                       setRestoreValidation(null);
                     }}
-                    className="px-4 py-2 text-xs font-semibold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-xl"
+                    className="px-4 py-2 text-xs font-semibold bg-slate-200 dark:bg-slate-800 rounded-xl"
                   >
                     Dismiss
                   </button>
@@ -1127,26 +1565,25 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
         </div>
       )}
 
-      {/* Reset Confirmation */}
+      {/* Confirm Dialogs */}
       <ConfirmDialog
         open={showResetConfirm}
         title="Reset All Local Data?"
-        description="This will permanently delete all logged moments, activities, memories, attachments, and financial journal entries on this device. Make sure you downloaded a backup first."
-        confirmLabel="Yes, Reset Everything"
+        description="This will permanently delete all records on this device. Make sure you downloaded a backup first."
+        confirmLabel="Reset Everything"
         variant="danger"
         onConfirm={() => {
           setShowResetConfirm(false);
           onResetDatabase();
-          showToast('Workspace reset to empty');
+          showToast('Workspace reset');
         }}
         onCancel={() => setShowResetConfirm(false)}
       />
 
-      {/* Demo Load Confirmation */}
       <ConfirmDialog
         open={showDemoConfirm}
         title="Load Sample Life Workspace?"
-        description="This will replace your current local workspace with realistic sample moments (birthdays, festivals, trips), curated memory photos, task activities, and financial entries."
+        description="This will replace current data with realistic sample events, activities, memories, and financial entries."
         confirmLabel="Load Sample Data"
         variant="primary"
         onConfirm={() => {
@@ -1155,6 +1592,19 @@ export const SettingsAndBackupView: React.FC<SettingsAndBackupViewProps> = ({
           showToast('Sample workspace loaded');
         }}
         onCancel={() => setShowDemoConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={showResetAppearanceConfirm}
+        title="Restore Default Appearance?"
+        description="This will reset theme, green shade, density, corner radius, and card style back to their original botanical defaults."
+        confirmLabel="Restore Defaults"
+        variant="primary"
+        onConfirm={() => {
+          setShowResetAppearanceConfirm(false);
+          handleResetAppearance();
+        }}
+        onCancel={() => setShowResetAppearanceConfirm(false)}
       />
     </div>
   );

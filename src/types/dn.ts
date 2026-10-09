@@ -1,5 +1,15 @@
 export type ThemeMode = 'light' | 'dark' | 'system';
 
+export type BrandGreenShade = 'botanical' | 'forest' | 'evergreen' | 'moss';
+
+export type InterfaceDensity = 'comfortable' | 'balanced' | 'compact';
+
+export type CardStyle = 'minimal' | 'bordered' | 'softly-elevated';
+
+export type CornerRadius = 'sharp' | 'refined' | 'rounded';
+
+export type TextScale = 'default' | 'large' | 'compact';
+
 export type CurrencyCode = 'INR' | 'USD' | 'EUR' | 'GBP';
 
 export type DateFormatStyle = 'dd-mmm-yyyy' | 'mmm-dd-yyyy' | 'yyyy-mm-dd';
@@ -50,7 +60,7 @@ export interface MomentRecord {
 
 export interface ActivityRecord {
   id: string;
-  momentId?: string;
+  momentId?: string; // Optional reference to an event
   title: string;
   date: string;
   priority: ActivityPriority;
@@ -70,8 +80,8 @@ export interface MemoryRecord {
   date: string;
   location?: string;
   photoUrl?: string;
-  momentId?: string;
-  activityId?: string;
+  momentId?: string; // Optional reference to an event
+  activityId?: string; // Optional reference to an activity
   createdAt: string;
 }
 
@@ -83,8 +93,8 @@ export interface AttachmentRecord {
   sizeBytes?: number;
   url: string;
   description?: string;
-  momentId?: string;
-  activityId?: string;
+  momentId?: string; // Optional reference to an event
+  activityId?: string; // Optional reference to an activity
   createdAt: string;
 }
 
@@ -95,7 +105,7 @@ export interface GreetingRecord {
   message: string;
   style: GreetingCardStyle;
   senderName: string;
-  momentId?: string;
+  momentId?: string; // Optional reference to an event
   createdAt: string;
 }
 
@@ -107,8 +117,8 @@ export interface FinanceRecord {
   title: string;
   category: string;
   notes?: string;
-  momentId?: string;
-  activityId?: string;
+  momentId?: string; // Optional reference to an event
+  activityId?: string; // Optional reference to an activity
   createdAt: string;
 }
 
@@ -122,14 +132,52 @@ export interface UserProfile {
   backupCount: number;
 }
 
+export interface HomeSectionsVisibility {
+  focus: boolean;
+  events: boolean;
+  activities: boolean;
+  memories: boolean;
+  onThisDay: boolean;
+  finances: boolean;
+}
+
 export interface AppSettings {
+  // Essential appearance
   theme: ThemeMode;
   currency: CurrencyCode;
   dateFormat: DateFormatStyle;
   defaultMomentType: string;
+  
+  // Taxonomies
   momentTypes: CustomTaxonomyItem[];
   expenseCategories: CustomTaxonomyItem[];
   incomeTypes: CustomTaxonomyItem[];
+
+  // Deep Personalization: Appearance & Layout
+  brandGreenShade?: BrandGreenShade;
+  density?: InterfaceDensity;
+  cardStyle?: CardStyle;
+  cornerRadius?: CornerRadius;
+  textScale?: TextScale;
+  reducedMotion?: boolean;
+
+  // Deep Personalization: Home Dashboard
+  homeSections?: HomeSectionsVisibility;
+  defaultLanding?: PrimarySection;
+  hideFinancesOnHome?: boolean;
+  homeProminence?: 'events' | 'memories' | 'balanced';
+
+  // Deep Personalization: Modules
+  eventViewMode?: 'list' | 'calendar' | 'timeline';
+  defaultRecurrence?: RecurrenceType;
+  activitySort?: 'date' | 'priority' | 'alphabetical';
+  activityCardStyle?: 'compact' | 'detailed';
+  hideCompletedActivities?: boolean;
+  memoryViewMode?: 'gallery' | 'timeline' | 'list';
+  financialMonthStartDay?: number;
+  defaultReportingPeriod?: 'month' | 'quarter' | 'year' | 'all';
+  weekStartDay?: 'monday' | 'sunday';
+  timeFormat?: '12h' | '24h';
 }
 
 export interface DNDatabase {
@@ -144,7 +192,15 @@ export interface DNDatabase {
   finances: FinanceRecord[];
 }
 
-export type PrimarySection = 'home' | 'moments' | 'memories' | 'finances' | 'settings';
+export type PrimarySection =
+  | 'home'
+  | 'events'
+  | 'moments' // backward-compat alias
+  | 'activities'
+  | 'memories'
+  | 'attachments'
+  | 'finances'
+  | 'settings';
 
 export type MemoriesSubTab = 'journal' | 'attachments' | 'greetings';
 export type FinancesSubTab = 'overview' | 'transactions' | 'insights';
