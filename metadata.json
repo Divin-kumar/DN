@@ -1,0 +1,8 @@
+{
+  "name": "DN Life Organizer",
+  "description": "A premium, private, and mobile-first PWA for managing life’s moments, memories, and finances in one elegant, cohesive space.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
